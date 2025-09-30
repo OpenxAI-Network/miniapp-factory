@@ -115,7 +115,7 @@ async fn change(data: web::Json<Change>, req: HttpRequest) -> impl Responder {
         return HttpResponse::Unauthorized().finish();
     }
 
-    let path = projectsdir().join(&data.project);
+    let path = projectsdir().join(&data.project).join("mini-app");
     let mut cli_command = Command::new(format!("{}aider", aider()));
     cli_command
         .env("OLLAMA_API_BASE", "http://127.0.0.1:11434")
