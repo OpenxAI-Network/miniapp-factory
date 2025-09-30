@@ -1,5 +1,5 @@
 {
-  description = "Rust app running on Xnode!";
+  description = "AI-powered application to allow creation of Farcaster mini apps with natural language.";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
