@@ -10,7 +10,7 @@ use regex::Regex;
 use crate::{
     factory::models::{Change, Create, User},
     utils::{
-        env::{aider, git, model, projectsdir, usersdir},
+        env::{aider, datadir, git, model, projectsdir, usersdir},
         error::ResponseError,
     },
 };
@@ -137,6 +137,8 @@ async fn change(data: web::Json<Change>, req: HttpRequest) -> impl Responder {
         .current_dir(&path)
         .arg("--model")
         .arg(format!("ollama_chat/{model}", model = model()))
+        .arg("--model-settings-file")
+        .arg(datadir().join(".aider.model.settings.yml"))
         .arg("--message")
         .arg(&data.instructions);
     if let Err(e) = cli_command.output() {

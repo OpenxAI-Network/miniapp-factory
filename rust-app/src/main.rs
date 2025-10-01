@@ -1,8 +1,8 @@
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, write};
 
 use actix_web::{App, HttpServer, web};
 
-use crate::utils::env::{datadir, hostname, port, projectsdir, usersdir};
+use crate::utils::env::{datadir, hostname, model, port, projectsdir, usersdir};
 
 mod factory;
 mod utils;
@@ -33,6 +33,29 @@ async fn main() -> std::io::Result<()> {
     {
         let dir = usersdir();
         create_dir_all(&dir).inspect_err(|e| {
+            log::error!(
+                "Could not create users dir at {dir}: {e}",
+                dir = dir.display()
+            )
+        })?;
+    }
+
+    // Write settings
+    {
+        let dir = datadir();
+        write(
+            dir.join(".aider.model.settings.yml"),
+            format!(
+                "\
+- name: ollama_chat/{model}
+  extra_params:
+    num_ctx: 30000
+    keep_alive: 30m
+    ",
+                model = model()
+            ),
+        )
+        .inspect_err(|e| {
             log::error!(
                 "Could not create users dir at {dir}: {e}",
                 dir = dir.display()
