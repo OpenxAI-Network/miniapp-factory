@@ -897,6 +897,7 @@ dependencies = [
  "actix-web",
  "env_logger",
  "log",
+ "regex",
  "serde",
  "serde_json",
 ]

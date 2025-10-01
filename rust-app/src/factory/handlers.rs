@@ -5,6 +5,7 @@ use std::{
 };
 
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
+use regex::Regex;
 
 use crate::{
     factory::models::{Change, Create, User},
@@ -45,6 +46,13 @@ async fn create(data: web::Json<Create>, req: HttpRequest) -> impl Responder {
             return HttpResponse::Unauthorized().finish();
         }
     };
+
+    if !valid_project(&data.project) {
+        return HttpResponse::BadRequest().json(ResponseError::new(format!(
+            "{project} is not a valid project name.",
+            project = data.project
+        )));
+    }
 
     let path = projectsdir().join(&data.project);
     if !exists(&path).is_ok_and(|exists| !exists) {
@@ -108,6 +116,13 @@ async fn change(data: web::Json<Change>, req: HttpRequest) -> impl Responder {
         }
     };
 
+    if !valid_project(&data.project) {
+        return HttpResponse::BadRequest().json(ResponseError::new(format!(
+            "{project} is not a valid project name.",
+            project = data.project
+        )));
+    }
+
     if !get_projects(user)
         .iter()
         .any(|project| *project == data.project)
@@ -134,6 +149,12 @@ async fn change(data: web::Json<Change>, req: HttpRequest) -> impl Responder {
     }
 
     HttpResponse::Ok().finish()
+}
+
+fn valid_project(project: &str) -> bool {
+    Regex::new(r"^[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?$")
+        .expect("Invalid Project Regex")
+        .is_match(project)
 }
 
 fn get_projects(user: &str) -> Vec<String> {
