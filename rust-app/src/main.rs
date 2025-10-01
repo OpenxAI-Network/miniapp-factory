@@ -48,9 +48,6 @@ async fn main() -> std::io::Result<()> {
             format!(
                 "\
 - name: ollama_chat/{model}
-  extra_params:
-    num_ctx: 30000
-    keep_alive: 30m
     ",
                 model = model()
             ),
