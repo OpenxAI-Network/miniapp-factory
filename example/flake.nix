@@ -37,6 +37,7 @@
           { pkgs, ... }@args:
           {
             services.miniapp-factory.enable = true;
+            services.miniapp-factory.github-token = "";
 
             services.ollama.acceleration = "cuda";
             hardware.graphics = {

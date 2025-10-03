@@ -38,6 +38,14 @@ pub fn model() -> String {
     env_var("MODEL").unwrap_or("gpt-oss:20b".to_string())
 }
 
+pub fn ghtoken() -> String {
+    env_var("GH_TOKEN").expect("No GH_TOKEN supplied.")
+}
+
+pub fn gh() -> String {
+    env_var("GH").unwrap_or("".to_string())
+}
+
 pub fn git() -> String {
     env_var("GIT").unwrap_or("".to_string())
 }

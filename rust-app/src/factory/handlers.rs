@@ -1,5 +1,5 @@
 use std::{
-    fs::{OpenOptions, create_dir_all, exists, read_to_string},
+    fs::{OpenOptions, create_dir_all, exists, read_to_string, remove_dir_all},
     io::Write,
     process::Command,
 };
@@ -10,7 +10,7 @@ use regex::Regex;
 use crate::{
     factory::models::{Change, Create, User},
     utils::{
-        env::{aider, datadir, git, model, projectsdir, usersdir},
+        env::{aider, datadir, gh, ghtoken, git, model, projectsdir, usersdir},
         error::ResponseError,
     },
 };
@@ -100,6 +100,59 @@ async fn create(data: web::Json<Create>, req: HttpRequest) -> impl Responder {
         return HttpResponse::InternalServerError().finish();
     }
 
+    if let Err(e) = remove_dir_all(path.join(".git")) {
+        log::error!(
+            "Could not clean git repo {path}: {e}",
+            path = path.display()
+        );
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    let mut cli_command = Command::new(format!("{}gh", gh()));
+    cli_command
+        .env("GH_TOKEN", ghtoken())
+        .current_dir(&path)
+        .arg("create")
+        .arg(&data.project)
+        .arg("--public")
+        .arg("--source")
+        .arg(".")
+        .arg("--remote")
+        .arg("upstream");
+    if let Err(e) = cli_command.output() {
+        log::error!(
+            "Could create github project {project} for {path}: {e}",
+            project = data.project,
+            path = path.display()
+        );
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    let mut cli_command = Command::new(format!("{}git", git()));
+    cli_command
+        .current_dir(&path)
+        .arg("commit")
+        .arg("-a")
+        .arg("-m")
+        .arg("template");
+    if let Err(e) = cli_command.output() {
+        log::error!(
+            "Could create template commit for {path}: {e}",
+            path = path.display()
+        );
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    let mut cli_command = Command::new(format!("{}git", git()));
+    cli_command.current_dir(&path).arg("push");
+    if let Err(e) = cli_command.output() {
+        log::error!(
+            "Could not push {path} to remote repo: {e}",
+            path = path.display()
+        );
+        return HttpResponse::InternalServerError().finish();
+    }
+
     HttpResponse::Ok().finish()
 }
 
@@ -130,22 +183,35 @@ async fn change(data: web::Json<Change>, req: HttpRequest) -> impl Responder {
         return HttpResponse::Unauthorized().finish();
     }
 
-    let path = projectsdir().join(&data.project).join("mini-app");
-    let mut cli_command = Command::new(format!("{}aider", aider()));
-    cli_command
-        .env("OLLAMA_API_BASE", "http://127.0.0.1:11434")
-        .current_dir(&path)
-        .arg("--model")
-        .arg(format!("ollama_chat/{model}", model = model()))
-        .arg("--model-settings-file")
-        .arg(datadir().join(".aider.model.settings.yml"))
-        .arg("--message")
-        .arg(&data.instructions);
+    let path = projectsdir().join(&data.project);
+    {
+        let path = path.join("mini-app");
+        let mut cli_command = Command::new(format!("{}aider", aider()));
+        cli_command
+            .env("OLLAMA_API_BASE", "http://127.0.0.1:11434")
+            .current_dir(&path)
+            .arg("--model")
+            .arg(format!("ollama_chat/{model}", model = model()))
+            .arg("--model-settings-file")
+            .arg(datadir().join(".aider.model.settings.yml"))
+            .arg("--message")
+            .arg(&data.instructions);
+        if let Err(e) = cli_command.output() {
+            log::error!(
+                "Could not perform requested change {instructions} on {project}: {e}",
+                instructions = data.instructions,
+                project = data.project
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+    }
+
+    let mut cli_command = Command::new(format!("{}git", git()));
+    cli_command.current_dir(&path).arg("push");
     if let Err(e) = cli_command.output() {
         log::error!(
-            "Could not perform requested change {instructions} on {project}: {e}",
-            instructions = data.instructions,
-            project = data.project
+            "Could not push {path} to remote repo: {e}",
+            path = path.display()
         );
         return HttpResponse::InternalServerError().finish();
     }

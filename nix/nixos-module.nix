@@ -76,12 +76,21 @@ in
         '';
       };
 
+      gh = lib.mkOption {
+        type = lib.types.package;
+        default = pkgs.gh;
+        example = pkgs.gh;
+        description = ''
+          gh equivalent executable to use for project creation.
+        '';
+      };
+
       git = lib.mkOption {
         type = lib.types.package;
         default = pkgs.git;
         example = pkgs.git;
         description = ''
-          git equivalent executable to use for code generation.
+          git equivalent executable to use for project updates.
         '';
       };
 
@@ -91,6 +100,13 @@ in
         example = pkgs.aider-chat;
         description = ''
           aider equivalent executable to use for code generation.
+        '';
+      };
+
+      github-token = lib.mkOption {
+        type = lib.types.str;
+        description = ''
+          GitHub Access Token for creating repos.
         '';
       };
     };
@@ -115,6 +131,8 @@ in
         PROJECTSDIR = cfg.projectsDir;
         USERSDIR = cfg.usersDir;
         MODEL = cfg.model;
+        GH_TOKEN = cfg.github-token;
+        GH = "${cfg.gh}/bin/";
         GIT = "${cfg.git}/bin/";
         AIDER = "${cfg.aider}/bin/";
       };
@@ -125,6 +143,39 @@ in
         StateDirectory = "miniapp-factory";
         Restart = "on-failure";
       };
+    };
+
+    programs.git = {
+      enable = true;
+      config = {
+        user.name = "Mini App Factory";
+        user.email = "miniapp-factory@openxai.org";
+        github.user = "miniapp-factory";
+        hub.protocol = "ssh";
+        init.defaultBranch = "main";
+        push.autoSetupRemote = true;
+        url."git@github.com:".insteadOf = [
+          "https://github.com/"
+          "github:"
+        ];
+        core.sshCommand = "${pkgs.openssh}/bin/ssh -i /var/lib/miniapp-factory/.ssh/id_ed25519";
+      };
+    };
+
+    systemd.services.miniapp-factory-sshkey = {
+      wantedBy = [ "multi-user.target" ];
+      description = "Generate SSH key to use for git.";
+      serviceConfig = {
+        User = "miniapp-factory";
+        Group = "miniapp-factory";
+        StateDirectory = "miniapp-factory";
+      };
+      script = ''
+        if [ ! -f /var/lib/miniapp-factory/.ssh/id_ed25519 ]; then
+          ${pkgs.coreutils}/bin/mkdir /var/lib/miniapp-factory/.ssh
+          ${pkgs.openssh}/bin/ssh-keygen -t ed25519 -C \"miniapp-factory@openxai.org\" -f /var/lib/miniapp-factory/.ssh/id_ed25519
+        fi
+      '';
     };
 
     nixpkgs.config.allowUnfree = true;
