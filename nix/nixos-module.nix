@@ -158,7 +158,7 @@ in
           "https://github.com/"
           "github:"
         ];
-        core.sshCommand = "${pkgs.openssh}/bin/ssh -i /var/lib/miniapp-factory/.ssh/id_ed25519";
+        core.sshCommand = "${pkgs.openssh}/bin/ssh -o StrictHostKeyChecking=no -i /var/lib/miniapp-factory/.ssh/id_ed25519";
       };
     };
 

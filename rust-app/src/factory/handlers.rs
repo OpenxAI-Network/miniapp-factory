@@ -54,8 +54,8 @@ async fn create(data: web::Json<Create>, req: HttpRequest) -> impl Responder {
         )));
     }
 
-    let path = projectsdir().join(&data.project);
-    if !exists(&path).is_ok_and(|exists| !exists) {
+    let path = projectsdir();
+    if !exists(path.join(&data.project)).is_ok_and(|exists| !exists) {
         return HttpResponse::BadRequest().json(ResponseError::new(format!(
             "Project {project} already exists.",
             project = data.project
@@ -87,67 +87,22 @@ async fn create(data: web::Json<Create>, req: HttpRequest) -> impl Responder {
         }
     }
 
-    let mut cli_command = Command::new(format!("{}git", git()));
-    cli_command
-        .arg("clone")
-        .arg("https://github.com/OpenxAI-Network/xnode-miniapp-template")
-        .arg(&path);
-    if let Err(e) = cli_command.output() {
-        log::error!(
-            "Could not clone template to {path}: {e}",
-            path = path.display()
-        );
-        return HttpResponse::InternalServerError().finish();
-    }
-
-    if let Err(e) = remove_dir_all(path.join(".git")) {
-        log::error!(
-            "Could not clean git repo {path}: {e}",
-            path = path.display()
-        );
-        return HttpResponse::InternalServerError().finish();
-    }
-
     let mut cli_command = Command::new(format!("{}gh", gh()));
     cli_command
-        .env("GH_TOKEN", ghtoken())
         .current_dir(&path)
+        .env("GH_TOKEN", ghtoken())
+        .env("PATH", git())
+        .arg("repo")
         .arg("create")
         .arg(&data.project)
         .arg("--public")
-        .arg("--source")
-        .arg(".")
-        .arg("--remote")
-        .arg("upstream");
+        .arg("--clone")
+        .arg("--template")
+        .arg("OpenxAI-Network/xnode-miniapp-template");
     if let Err(e) = cli_command.output() {
         log::error!(
             "Could create github project {project} for {path}: {e}",
             project = data.project,
-            path = path.display()
-        );
-        return HttpResponse::InternalServerError().finish();
-    }
-
-    let mut cli_command = Command::new(format!("{}git", git()));
-    cli_command
-        .current_dir(&path)
-        .arg("commit")
-        .arg("-a")
-        .arg("-m")
-        .arg("template");
-    if let Err(e) = cli_command.output() {
-        log::error!(
-            "Could create template commit for {path}: {e}",
-            path = path.display()
-        );
-        return HttpResponse::InternalServerError().finish();
-    }
-
-    let mut cli_command = Command::new(format!("{}git", git()));
-    cli_command.current_dir(&path).arg("push");
-    if let Err(e) = cli_command.output() {
-        log::error!(
-            "Could not push {path} to remote repo: {e}",
             path = path.display()
         );
         return HttpResponse::InternalServerError().finish();
@@ -207,7 +162,7 @@ async fn change(data: web::Json<Change>, req: HttpRequest) -> impl Responder {
     }
 
     let mut cli_command = Command::new(format!("{}git", git()));
-    cli_command.current_dir(&path).arg("push");
+    cli_command.arg("-C").arg(&path).arg("push");
     if let Err(e) = cli_command.output() {
         log::error!(
             "Could not push {path} to remote repo: {e}",
