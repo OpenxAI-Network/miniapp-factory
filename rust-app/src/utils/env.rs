@@ -28,12 +28,6 @@ pub fn projectsdir() -> PathBuf {
         .unwrap_or(Path::new(&datadir()).join("projects"))
 }
 
-pub fn usersdir() -> PathBuf {
-    env_var("USERSDIR")
-        .map(|d| Path::new(&d).to_path_buf())
-        .unwrap_or(Path::new(&datadir()).join("users"))
-}
-
 pub fn model() -> String {
     env_var("MODEL").unwrap_or("gpt-oss:20b".to_string())
 }
@@ -52,4 +46,8 @@ pub fn git() -> String {
 
 pub fn aider() -> String {
     env_var("AIDER").unwrap_or("".to_string())
+}
+
+pub fn database() -> String {
+    env_var("DATABASE").unwrap_or("postgres:openxai-indexer?host=/run/postgresql".to_string())
 }

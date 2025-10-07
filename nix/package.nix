@@ -1,4 +1,4 @@
-{ rustPlatform }:
+{ pkgs, rustPlatform }:
 rustPlatform.buildRustPackage {
   pname = "miniapp-factory";
   version = "1.0.0";
@@ -9,6 +9,13 @@ rustPlatform.buildRustPackage {
   };
 
   doDist = false;
+
+  buildInputs = with pkgs; [
+    openssl
+  ];
+  nativeBuildInputs = with pkgs; [
+    pkg-config
+  ];
 
   meta = {
     mainProgram = "miniapp-factory";

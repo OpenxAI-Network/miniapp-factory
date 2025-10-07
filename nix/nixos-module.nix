@@ -58,15 +58,6 @@ in
         '';
       };
 
-      usersDir = lib.mkOption {
-        type = lib.types.path;
-        default = "${cfg.dataDir}/users";
-        example = "/var/lib/miniapp-factory/users";
-        description = ''
-          The directory to store users.
-        '';
-      };
-
       model = lib.mkOption {
         type = lib.types.str;
         default = "gpt-oss:20b";
@@ -109,6 +100,26 @@ in
           GitHub Access Token for creating repos.
         '';
       };
+
+      database = lib.mkOption {
+        type = lib.types.str;
+        default = "postgres:miniapp-factory?host=/run/postgresql";
+        example = "postgres:miniapp-factory?host=/run/postgresql";
+        description = ''
+          Connection string to access the postgres database.
+        '';
+      };
+
+      postgres = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          example = false;
+          description = ''
+            Enable the default postgres config.
+          '';
+        };
+      };
     };
   };
 
@@ -129,12 +140,12 @@ in
         RUST_LOG = cfg.verbosity;
         DATADIR = cfg.dataDir;
         PROJECTSDIR = cfg.projectsDir;
-        USERSDIR = cfg.usersDir;
         MODEL = cfg.model;
         GH_TOKEN = cfg.github-token;
         GH = "${cfg.gh}/bin/";
         GIT = "${cfg.git}/bin/";
         AIDER = "${cfg.aider}/bin/";
+        DATABASE = cfg.database;
       };
       serviceConfig = {
         ExecStart = "${lib.getExe miniapp-factory}";
@@ -193,5 +204,20 @@ in
     systemd.services.ollama-model-loader.serviceConfig.User = "ollama";
     systemd.services.ollama-model-loader.serviceConfig.Group = "ollama";
     systemd.services.ollama-model-loader.serviceConfig.DynamicUser = lib.mkForce false;
+
+    services.postgresql = lib.mkIf cfg.postgres.enable {
+      enable = true;
+      ensureDatabases = [ "miniapp-factory" ];
+      ensureUsers = [
+        {
+          name = "miniapp-factory";
+          ensureDBOwnership = true;
+        }
+      ];
+      authentication = pkgs.lib.mkOverride 10 ''
+        #type database  DBuser  auth-method
+        local sameuser  all     peer
+      '';
+    };
   };
 }

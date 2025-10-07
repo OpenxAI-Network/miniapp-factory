@@ -2,8 +2,12 @@ use std::fs::{create_dir_all, write};
 
 use actix_web::{App, HttpServer, web};
 
-use crate::utils::env::{datadir, hostname, model, port, projectsdir, usersdir};
+use crate::{
+    database::Database,
+    utils::env::{datadir, hostname, model, port, projectsdir},
+};
 
+mod database;
 mod factory;
 mod utils;
 
@@ -30,15 +34,6 @@ async fn main() -> std::io::Result<()> {
             )
         })?;
     }
-    {
-        let dir = usersdir();
-        create_dir_all(&dir).inspect_err(|e| {
-            log::error!(
-                "Could not create users dir at {dir}: {e}",
-                dir = dir.display()
-            )
-        })?;
-    }
 
     // Write settings
     {
@@ -60,9 +55,13 @@ async fn main() -> std::io::Result<()> {
         })?;
     }
 
+    let database = Database::new().await;
+
     // Start server
     HttpServer::new(move || {
-        App::new().service(web::scope("/api/factory").configure(factory::configure))
+        App::new()
+            .app_data(web::Data::new(database.clone()))
+            .service(web::scope("/api/factory").configure(factory::configure))
     })
     .bind(format!(
         "{hostname}:{port}",
