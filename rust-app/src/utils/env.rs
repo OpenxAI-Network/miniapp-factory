@@ -44,6 +44,10 @@ pub fn git() -> String {
     env_var("GIT").unwrap_or("".to_string())
 }
 
+pub fn npm() -> String {
+    env_var("NPM").unwrap_or("npm".to_string())
+}
+
 pub fn aider() -> String {
     env_var("AIDER").unwrap_or("".to_string())
 }

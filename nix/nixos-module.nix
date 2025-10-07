@@ -85,6 +85,15 @@ in
         '';
       };
 
+      npm = lib.mkOption {
+        type = lib.types.package;
+        default = pkgs.bun;
+        example = pkgs.bun;
+        description = ''
+          npm equivalent executable to use for project build testing.
+        '';
+      };
+
       aider = lib.mkOption {
         type = lib.types.package;
         default = pkgs.aider-chat;
@@ -144,6 +153,7 @@ in
         GH_TOKEN = cfg.github-token;
         GH = "${cfg.gh}/bin/";
         GIT = "${cfg.git}/bin/";
+        NPM = "${lib.getExe cfg.npm}";
         AIDER = "${cfg.aider}/bin/";
         DATABASE = cfg.database;
       };

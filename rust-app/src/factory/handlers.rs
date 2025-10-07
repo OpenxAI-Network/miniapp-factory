@@ -9,7 +9,7 @@ use crate::{
     factory::models::{Change, Create, User},
     utils::{
         auth::get_session,
-        env::{aider, datadir, gh, ghtoken, git, model, projectsdir},
+        env::{aider, datadir, gh, ghtoken, git, model, npm, projectsdir},
         error::ResponseError,
         wallet::get_signer,
     },
@@ -103,7 +103,7 @@ async fn create(
         .arg("--public")
         .arg("--clone")
         .arg("--template")
-        .arg("OpenxAI-Network/xnode-miniapp-template");
+        .arg("OpenxAI-Network/miniapp-factory-template");
     if let Err(e) = cli_command.output() {
         log::error!(
             "Could create github project {project} for {path}: {e}",
@@ -181,7 +181,7 @@ async fn create(
                 ))
                 .await
             {
-                log::error!("Could not update mini app host expose file: {e:?}");
+                log::error!("Could not update mini app host os: {e:?}");
                 return HttpResponse::InternalServerError().finish();
             }
         }
@@ -254,10 +254,13 @@ async fn change(
             .arg("--model-settings-file")
             .arg(datadir().join(".aider.model.settings.yml"))
             .arg("--restore-chat-history")
+            .arg("--test-cmd")
+            .arg(format!(
+                "cd {path:?} && {npm} i --no-save && {npm} run build",
+                npm = npm()
+            ))
+            .arg("--auto-test")
             .arg("--message")
-            // .arg("--test-cmd")
-            // .arg(format!("{npm} i --no-save && {npm} run build", npm = npm()))
-            // .arg("--auto-test")
             .arg(&data.instructions);
         if let Err(e) = cli_command.output() {
             log::error!(
