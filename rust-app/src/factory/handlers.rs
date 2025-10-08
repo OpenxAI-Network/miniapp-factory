@@ -244,12 +244,12 @@ async fn change(
 
     let path = projectsdir().join(&data.project);
     {
-        let path = path.join("mini-app");
+        let project_path = path.join("mini-app");
         let mut cli_command = Command::new(format!("{}aider", aider()));
         cli_command
             .env("OLLAMA_API_BASE", "http://127.0.0.1:11434")
             .env("HOME", datadir())
-            .current_dir(&path)
+            .current_dir(&project_path)
             .arg("--model")
             .arg(format!("ollama_chat/{model}", model = model()))
             .arg("--model-settings-file")
@@ -258,7 +258,7 @@ async fn change(
             .arg("--test-cmd")
             .arg(format!(
                 "{npm} i --cwd {path} --no-save && {npm} run --cwd {path} build",
-                path = path.display(),
+                path = project_path.display(),
                 npm = npm()
             ))
             .arg("--auto-test")
