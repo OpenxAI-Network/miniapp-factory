@@ -262,6 +262,8 @@ async fn change(
                 npm = npm()
             ))
             .arg("--auto-test")
+            .arg("--read")
+            .arg(path.join("documentation").join("index.md"))
             .arg("--message")
             .arg(&data.instructions);
         if let Err(e) = cli_command.output() {
