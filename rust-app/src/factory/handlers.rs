@@ -248,6 +248,7 @@ async fn change(
         let mut cli_command = Command::new(format!("{}aider", aider()));
         cli_command
             .env("OLLAMA_API_BASE", "http://127.0.0.1:11434")
+            .env("HOME", datadir())
             .current_dir(&path)
             .arg("--model")
             .arg(format!("ollama_chat/{model}", model = model()))
@@ -256,7 +257,8 @@ async fn change(
             .arg("--restore-chat-history")
             .arg("--test-cmd")
             .arg(format!(
-                "cd {path:?} && {npm} i --no-save && {npm} run build",
+                "{npm} i --cwd {path} --no-save && {npm} run --cwd {path} build",
+                path = path.display(),
                 npm = npm()
             ))
             .arg("--auto-test")
