@@ -2,6 +2,7 @@ use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
 use crate::utils::env::database;
 
+pub mod deployments;
 pub mod projects;
 
 pub type DatabaseConnection = Pool<Postgres>;
@@ -27,6 +28,7 @@ pub async fn create_connection() -> DatabaseConnection {
         .unwrap_or_else(|e| panic!("Could not establish database connection: {e}"));
 
     projects::create_table(&connection).await;
+    deployments::create_table(&connection).await;
 
     connection
 }

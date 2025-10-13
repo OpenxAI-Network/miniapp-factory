@@ -5,7 +5,7 @@ use crate::database::{Database, DatabaseConnection};
 
 pub async fn create_table(connection: &DatabaseConnection) {
     sqlx::raw_sql(
-        "CREATE TABLE IF NOT EXISTS projects(name TEXT PRIMARY KEY NOT NULL, owner TEXT NOT NULL, account_association JSON)",
+        "CREATE TABLE IF NOT EXISTS projects(name TEXT PRIMARY KEY NOT NULL, owner TEXT NOT NULL, account_association JSON, base_build JSON)",
     )
     .execute(connection)
     .await
@@ -14,9 +14,14 @@ pub async fn create_table(connection: &DatabaseConnection) {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccountAssociation {
-    header: String,
-    payload: String,
-    signature: String,
+    pub header: String,
+    pub payload: String,
+    pub signature: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BaseBuild {
+    pub allowed_addresses: Vec<String>,
 }
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]
@@ -24,28 +29,33 @@ pub struct DatabaseProject {
     pub name: String,
     pub owner: String,
     pub account_association: Option<Json<AccountAssociation>>,
+    pub base_build: Option<Json<BaseBuild>>,
 }
 
 impl DatabaseProject {
     #[allow(dead_code)]
     pub async fn get_all(database: &Database) -> Result<Vec<Self>, Error> {
-        query_as("SELECT name, owner, account_association FROM projects")
+        query_as("SELECT name, owner, account_association, base_build FROM projects")
             .fetch_all(&database.connection)
             .await
     }
 
     pub async fn get_all_by_owner(database: &Database, owner: &str) -> Result<Vec<Self>, Error> {
-        query_as("SELECT name, owner, account_association FROM projects WHERE owner = $1")
-            .bind(owner)
-            .fetch_all(&database.connection)
-            .await
+        query_as(
+            "SELECT name, owner, account_association, base_build FROM projects WHERE owner = $1",
+        )
+        .bind(owner)
+        .fetch_all(&database.connection)
+        .await
     }
 
     pub async fn get_by_name(database: &Database, name: &str) -> Result<Option<Self>, Error> {
-        query_as("SELECT name, owner, account_association FROM projects WHERE name = $1")
-            .bind(name)
-            .fetch_optional(&database.connection)
-            .await
+        query_as(
+            "SELECT name, owner, account_association, base_build FROM projects WHERE name = $1",
+        )
+        .bind(name)
+        .fetch_optional(&database.connection)
+        .await
     }
 
     pub async fn insert(&self, database: &Database) -> Result<(), Error> {
@@ -53,12 +63,14 @@ impl DatabaseProject {
             name,
             owner,
             account_association,
+            base_build,
         } = self;
 
-        query("INSERT INTO projects(name, owner, account_association) VALUES ($1, $2, $3);")
+        query("INSERT INTO projects(name, owner, account_association, base_build) VALUES ($1, $2, $3, $4);")
             .bind(name)
             .bind(owner)
             .bind(account_association)
+            .bind(base_build)
             .execute(&database.connection)
             .await?;
 
@@ -66,6 +78,32 @@ impl DatabaseProject {
     }
 
     pub fn get_flake(&self) -> String {
+        let header = self
+            .account_association
+            .as_ref()
+            .map(|json| json.header.clone())
+            .unwrap_or_default();
+        let payload = self
+            .account_association
+            .as_ref()
+            .map(|json| json.payload.clone())
+            .unwrap_or_default();
+        let signature = self
+            .account_association
+            .as_ref()
+            .map(|json| json.signature.clone())
+            .unwrap_or_default();
+        let allowed_addresses = self
+            .base_build
+            .as_ref()
+            .map(|json| {
+                json.allowed_addresses
+                    .iter()
+                    .map(|address| format!("\"{address}\""))
+                    .collect::<Vec<String>>()
+                    .join(" ")
+            })
+            .unwrap_or_default();
         format!(
             "\
 {{
@@ -93,6 +131,14 @@ impl DatabaseProject {
         {{
           services.xnode-miniapp-template.enable = true;
           services.xnode-miniapp-template.url = \"https://{name}.miniapp-factory.marketplace.openxai.network\";
+          services.xnode-miniapp-template.accountAssociation = {{
+            header = \"{header}\";
+            payload = \"{payload}\";
+            signature = \"{signature}\";
+          }};
+          services.xnode-miniapp-template.baseBuilder = {{
+            allowedAddresses = [ {allowed_addresses} ];
+          }};
         }}
       ];
     }};

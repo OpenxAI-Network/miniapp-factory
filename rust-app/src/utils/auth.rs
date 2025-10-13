@@ -1,7 +1,7 @@
 use hex::ToHex;
 use xnode_manager_sdk::utils::Session;
 
-use crate::utils::{error::ResponseError, time::get_time};
+use crate::utils::{error::ResponseError, time::get_time_u64};
 
 use super::{keccak::hash_message, wallet::get_signer};
 
@@ -11,7 +11,7 @@ pub async fn get_session(xnode_id: &str) -> Result<Session, ResponseError> {
     let addr: String = signer.public().address().encode_hex();
     let user = format!("eth:{addr}");
     let domain = xnode_id.to_string();
-    let timestamp = get_time();
+    let timestamp = get_time_u64();
     let message = format!("Xnode Auth authenticate {domain} at {timestamp}");
     let message_bytes = hash_message(&message);
     let signature = match signer.sign(&message_bytes) {

@@ -5,12 +5,13 @@ use hex::ToHex;
 use regex::Regex;
 
 use crate::{
-    database::{Database, projects::DatabaseProject},
-    factory::models::{Change, Create, User},
+    database::{Database, deployments::DatabaseDeployment, projects::DatabaseProject},
+    factory::models::{Available, Change, Create, History, User},
     utils::{
         auth::get_session,
-        env::{aider, datadir, gh, ghtoken, git, model, npm, projectsdir},
+        env::{gh, ghtoken, git, projectsdir},
         error::ResponseError,
+        time::get_time_i64,
         wallet::get_signer,
     },
 };
@@ -46,6 +47,45 @@ async fn info(database: web::Data<Database>, req: HttpRequest) -> impl Responder
         id: user.to_string(),
         projects,
     })
+}
+
+#[get("/project/available")]
+async fn available(
+    database: web::Data<Database>,
+    data: web::Query<Available>,
+    req: HttpRequest,
+) -> impl Responder {
+    let user = match req
+        .headers()
+        .get("xnode-auth-user")
+        .and_then(|header| header.to_str().ok())
+    {
+        Some(header) => header,
+        _ => {
+            return HttpResponse::Unauthorized().finish();
+        }
+    };
+
+    if !valid_project(&data.project) {
+        return HttpResponse::BadRequest().json(ResponseError::new(format!(
+            "{project} is not a valid project name.",
+            project = data.project
+        )));
+    }
+
+    match DatabaseProject::get_by_name(&database, &data.project).await {
+        Ok(project) => match project {
+            Some(_project) => HttpResponse::Ok().json(false),
+            None => HttpResponse::Ok().json(true),
+        },
+        Err(e) => {
+            log::error!(
+                "Could not get project {project} from the database: {e}",
+                project = data.project
+            );
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }
 
 #[post("/project/create")]
@@ -86,6 +126,7 @@ async fn create(
         name: data.project.clone(),
         owner: user.to_string(),
         account_association: None,
+        base_build: None,
     };
     if let Err(e) = project.insert(&database).await {
         log::error!("Could insert {project:?} into the database: {e}",);
@@ -219,13 +260,7 @@ async fn change(
 
     let project = match DatabaseProject::get_by_name(&database, &data.project).await {
         Ok(project) => match project {
-            Some(project) => {
-                if project.owner == user {
-                    project
-                } else {
-                    return HttpResponse::Unauthorized().finish();
-                }
-            }
+            Some(project) => project,
             None => {
                 return HttpResponse::BadRequest().json(ResponseError::new(format!(
                     "{project} does not exist.",
@@ -241,84 +276,85 @@ async fn change(
             return HttpResponse::InternalServerError().finish();
         }
     };
+    if project.owner != user {
+        return HttpResponse::Unauthorized().finish();
+    }
 
-    let path = projectsdir().join(&data.project);
+    let mut deployment = DatabaseDeployment {
+        id: 0,
+        project: data.project.clone(),
+        instructions: data.instructions.clone(),
+        submitted_at: get_time_i64(),
+        started_at: None,
+        finished_at: None,
+        deployment_request: None,
+    };
+    if let Err(e) = deployment.insert(&database).await {
+        log::error!("Could not insert deployment {deployment:?} into database: {e}");
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    HttpResponse::Ok().json(deployment.id)
+}
+
+#[get("/project/history")]
+async fn history(
+    database: web::Data<Database>,
+    data: web::Query<History>,
+    req: HttpRequest,
+) -> impl Responder {
+    let user = match req
+        .headers()
+        .get("xnode-auth-user")
+        .and_then(|header| header.to_str().ok())
     {
-        let project_path = path.join("mini-app");
-        let mut cli_command = Command::new(format!("{}aider", aider()));
-        cli_command
-            .env("OLLAMA_API_BASE", "http://127.0.0.1:11434")
-            .env("HOME", datadir())
-            .current_dir(&project_path)
-            .arg("--model")
-            .arg(format!("ollama_chat/{model}", model = model()))
-            .arg("--model-settings-file")
-            .arg(datadir().join(".aider.model.settings.yml"))
-            .arg("--restore-chat-history")
-            .arg("--test-cmd")
-            .arg(format!(
-                "{npm} i --cwd {path} --no-save && {npm} run --cwd {path} build",
-                path = project_path.display(),
-                npm = npm()
-            ))
-            .arg("--auto-test")
-            .arg("--read")
-            .arg(path.join("documentation").join("index.md"))
-            .arg("--message")
-            .arg(&data.instructions);
-        if let Err(e) = cli_command.output() {
+        Some(header) => header,
+        _ => {
+            return HttpResponse::Unauthorized().finish();
+        }
+    };
+
+    if !valid_project(&data.project) {
+        return HttpResponse::BadRequest().json(ResponseError::new(format!(
+            "{project} is not a valid project name.",
+            project = data.project
+        )));
+    }
+
+    let project = match DatabaseProject::get_by_name(&database, &data.project).await {
+        Ok(project) => match project {
+            Some(project) => project,
+            None => {
+                return HttpResponse::BadRequest().json(ResponseError::new(format!(
+                    "{project} does not exist.",
+                    project = data.project
+                )));
+            }
+        },
+        Err(e) => {
             log::error!(
-                "Could not perform requested change {instructions} on {project}: {e}",
-                instructions = data.instructions,
+                "Could not get project {project} from the database: {e}",
                 project = data.project
             );
             return HttpResponse::InternalServerError().finish();
         }
+    };
+    if project.owner != user {
+        return HttpResponse::Unauthorized().finish();
     }
 
-    let mut cli_command = Command::new(format!("{}git", git()));
-    cli_command.arg("-C").arg(&path).arg("push");
-    if let Err(e) = cli_command.output() {
-        log::error!(
-            "Could not push {path} to remote repo: {e}",
-            path = path.display()
-        );
-        return HttpResponse::InternalServerError().finish();
-    }
-
-    match get_session("miniapp-host.xnode-manager.openxai.org").await {
-        Ok(session) => {
-            if let Err(e) = xnode_manager_sdk::config::set(xnode_manager_sdk::config::SetInput {
-                session: &session,
-                path: xnode_manager_sdk::config::SetPath {
-                    container: data.project.clone(),
-                },
-                data: xnode_manager_sdk::config::ContainerChange {
-                    settings: {
-                        xnode_manager_sdk::config::ContainerSettings {
-                            flake: project.get_flake(),
-                            network: Some("containernet".to_string()),
-                            nvidia_gpus: None,
-                        }
-                    },
-                    update_inputs: Some(vec![]),
-                },
-            })
-            .await
-            {
-                log::error!(
-                    "Could not update mini app host project {project}: {e:?}",
-                    project = data.project
-                );
-                return HttpResponse::InternalServerError().finish();
-            }
-        }
+    let history = match DatabaseDeployment::get_all_by_project(&database, &project.name).await {
+        Ok(history) => history,
         Err(e) => {
-            return HttpResponse::InternalServerError().json(e);
+            log::error!(
+                "Could not get project deployment for {project} from the database: {e}",
+                project = data.project
+            );
+            return HttpResponse::InternalServerError().finish();
         }
-    }
+    };
 
-    HttpResponse::Ok().finish()
+    HttpResponse::Ok().json(history)
 }
 
 fn valid_project(project: &str) -> bool {

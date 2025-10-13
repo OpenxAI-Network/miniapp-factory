@@ -7,6 +7,11 @@ pub struct User {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct Available {
+    pub project: String,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Create {
     pub project: String,
 }
@@ -15,4 +20,9 @@ pub struct Create {
 pub struct Change {
     pub project: String,
     pub instructions: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct History {
+    pub project: String,
 }
