@@ -6,7 +6,7 @@ use regex::Regex;
 
 use crate::{
     database::{Database, deployments::DatabaseDeployment, projects::DatabaseProject},
-    factory::models::{Available, Change, Create, History, User},
+    factory::models::{AccountAssociation, Available, BaseBuild, Change, Create, History, User},
     utils::{
         auth::get_session,
         env::{gh, ghtoken, git, projectsdir},
@@ -127,6 +127,7 @@ async fn create(
         owner: user.to_string(),
         account_association: None,
         base_build: None,
+        version: None,
     };
     if let Err(e) = project.insert(&database).await {
         log::error!("Could insert {project:?} into the database: {e}",);
@@ -364,4 +365,198 @@ fn valid_project(project: &str) -> bool {
     Regex::new(r"^[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?$")
         .expect("Invalid Project Regex")
         .is_match(project)
+}
+
+#[post("/project/account_association")]
+async fn account_association(
+    database: web::Data<Database>,
+    data: web::Json<AccountAssociation>,
+    req: HttpRequest,
+) -> impl Responder {
+    let user = match req
+        .headers()
+        .get("xnode-auth-user")
+        .and_then(|header| header.to_str().ok())
+    {
+        Some(header) => header,
+        _ => {
+            return HttpResponse::Unauthorized().finish();
+        }
+    };
+
+    if !valid_project(&data.project) {
+        return HttpResponse::BadRequest().json(ResponseError::new(format!(
+            "{project} is not a valid project name.",
+            project = data.project
+        )));
+    }
+
+    let mut project = match DatabaseProject::get_by_name(&database, &data.project).await {
+        Ok(project) => match project {
+            Some(project) => project,
+            None => {
+                return HttpResponse::BadRequest().json(ResponseError::new(format!(
+                    "{project} does not exist.",
+                    project = data.project
+                )));
+            }
+        },
+        Err(e) => {
+            log::error!(
+                "Could not get project {project} from the database: {e}",
+                project = data.project
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+    if project.owner != user {
+        return HttpResponse::Unauthorized().finish();
+    }
+
+    if let Err(e) = project
+        .update_account_association(&database, data.account_association.clone())
+        .await
+    {
+        log::error!(
+            "Could not update account association to {account_association:?} for project {name}: {e}",
+            account_association = data.account_association,
+            name = data.project
+        );
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    let deployment_request = match get_session("miniapp-host.xnode-manager.openxai.org").await {
+        Ok(session) => {
+            match xnode_manager_sdk::config::set(xnode_manager_sdk::config::SetInput {
+                session: &session,
+                path: xnode_manager_sdk::config::SetPath {
+                    container: project.name.clone(),
+                },
+                data: xnode_manager_sdk::config::ContainerChange {
+                    settings: {
+                        xnode_manager_sdk::config::ContainerSettings {
+                            flake: project.get_flake(),
+                            network: Some("containernet".to_string()),
+                            nvidia_gpus: None,
+                        }
+                    },
+                    update_inputs: Some(vec![]),
+                },
+            })
+            .await
+            {
+                Ok(request_response) => request_response.request_id,
+                Err(e) => {
+                    log::error!(
+                        "Could not update mini app host project {project}: {e:?}",
+                        project = project.name
+                    );
+                    return HttpResponse::InternalServerError().finish();
+                }
+            }
+        }
+        Err(e) => {
+            log::error!("Could not get xnode session with miniapp-host: {e:?}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    HttpResponse::Ok().json(deployment_request)
+}
+
+#[post("/project/base_build")]
+async fn base_build(
+    database: web::Data<Database>,
+    data: web::Json<BaseBuild>,
+    req: HttpRequest,
+) -> impl Responder {
+    let user = match req
+        .headers()
+        .get("xnode-auth-user")
+        .and_then(|header| header.to_str().ok())
+    {
+        Some(header) => header,
+        _ => {
+            return HttpResponse::Unauthorized().finish();
+        }
+    };
+
+    if !valid_project(&data.project) {
+        return HttpResponse::BadRequest().json(ResponseError::new(format!(
+            "{project} is not a valid project name.",
+            project = data.project
+        )));
+    }
+
+    let mut project = match DatabaseProject::get_by_name(&database, &data.project).await {
+        Ok(project) => match project {
+            Some(project) => project,
+            None => {
+                return HttpResponse::BadRequest().json(ResponseError::new(format!(
+                    "{project} does not exist.",
+                    project = data.project
+                )));
+            }
+        },
+        Err(e) => {
+            log::error!(
+                "Could not get project {project} from the database: {e}",
+                project = data.project
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+    if project.owner != user {
+        return HttpResponse::Unauthorized().finish();
+    }
+
+    if let Err(e) = project
+        .update_base_build(&database, data.base_build.clone())
+        .await
+    {
+        log::error!(
+            "Could not update account association to {base_build:?} for project {name}: {e}",
+            base_build = data.base_build,
+            name = data.project
+        );
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    let deployment_request = match get_session("miniapp-host.xnode-manager.openxai.org").await {
+        Ok(session) => {
+            match xnode_manager_sdk::config::set(xnode_manager_sdk::config::SetInput {
+                session: &session,
+                path: xnode_manager_sdk::config::SetPath {
+                    container: project.name.clone(),
+                },
+                data: xnode_manager_sdk::config::ContainerChange {
+                    settings: {
+                        xnode_manager_sdk::config::ContainerSettings {
+                            flake: project.get_flake(),
+                            network: Some("containernet".to_string()),
+                            nvidia_gpus: None,
+                        }
+                    },
+                    update_inputs: Some(vec![]),
+                },
+            })
+            .await
+            {
+                Ok(request_response) => request_response.request_id,
+                Err(e) => {
+                    log::error!(
+                        "Could not update mini app host project {project}: {e:?}",
+                        project = project.name
+                    );
+                    return HttpResponse::InternalServerError().finish();
+                }
+            }
+        }
+        Err(e) => {
+            log::error!("Could not get xnode session with miniapp-host: {e:?}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    HttpResponse::Ok().json(deployment_request)
 }

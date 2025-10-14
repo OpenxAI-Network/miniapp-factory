@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::database::projects;
+
 #[derive(Serialize, Deserialize)]
 pub struct User {
     pub id: String,
@@ -25,4 +27,16 @@ pub struct Change {
 #[derive(Serialize, Deserialize)]
 pub struct History {
     pub project: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AccountAssociation {
+    pub project: String,
+    pub account_association: projects::AccountAssociation,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct BaseBuild {
+    pub project: String,
+    pub base_build: projects::BaseBuild,
 }

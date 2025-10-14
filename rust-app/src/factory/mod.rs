@@ -10,4 +10,6 @@ pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(handlers::create);
     cfg.service(handlers::change);
     cfg.service(handlers::history);
+    cfg.service(handlers::account_association);
+    cfg.service(handlers::base_build);
 }
