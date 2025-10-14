@@ -30,6 +30,12 @@ pub struct History {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct Version {
+    pub project: String,
+    pub version: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct AccountAssociation {
     pub project: String,
     pub account_association: projects::AccountAssociation,

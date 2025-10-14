@@ -114,6 +114,22 @@ impl DatabaseProject {
         Ok(())
     }
 
+    pub async fn update_version(
+        &mut self,
+        database: &Database,
+        version: Option<String>,
+    ) -> Result<(), Error> {
+        query("UPDATE projects SET version = $1 WHERE name = $2;")
+            .bind(&version)
+            .bind(&self.name)
+            .execute(&database.connection)
+            .await?;
+
+        self.version = version;
+
+        Ok(())
+    }
+
     pub fn get_flake(&self) -> String {
         let header = self
             .account_association

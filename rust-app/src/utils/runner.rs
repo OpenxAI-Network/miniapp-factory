@@ -160,26 +160,34 @@ pub async fn execute_pending_deployments(database: Database) {
                 );
             }
 
-            let project = match DatabaseProject::get_by_name(&database, &deployment.project).await {
-                Ok(project) => match project {
-                    Some(project) => project,
-                    None => {
+            let mut project =
+                match DatabaseProject::get_by_name(&database, &deployment.project).await {
+                    Ok(project) => match project {
+                        Some(project) => project,
+                        None => {
+                            log::error!(
+                                "Project {project} of deployment {id} does not exist",
+                                project = deployment.project,
+                                id = deployment.id
+                            );
+                            continue;
+                        }
+                    },
+                    Err(e) => {
                         log::error!(
-                            "Project {project} of deployment {id} does not exist",
-                            project = deployment.project,
-                            id = deployment.id
+                            "Could not get project {project} from the database: {e}",
+                            project = deployment.project
                         );
                         continue;
                     }
-                },
-                Err(e) => {
-                    log::error!(
-                        "Could not get project {project} from the database: {e}",
-                        project = deployment.project
-                    );
-                    continue;
-                }
-            };
+                };
+
+            if let Err(e) = project.update_version(&database, None).await {
+                log::error!(
+                    "Could not reset {project} version: {e}",
+                    project = deployment.project
+                );
+            }
 
             let deployment_request =
                 match get_session("miniapp-host.xnode-manager.openxai.org").await {
