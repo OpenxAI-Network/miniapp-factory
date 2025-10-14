@@ -26,15 +26,18 @@ pub async fn execute_pending_deployments(database: Database) {
         };
 
         if let Some(mut deployment) = deployment {
-            let started_at = get_time_i64();
-            if let Err(e) = deployment.update_started_at(&database, started_at).await {
+            let coding_started_at = get_time_i64();
+            if let Err(e) = deployment
+                .update_coding_started_at(&database, coding_started_at)
+                .await
+            {
                 log::error!(
-                    "Could not set started at to {started_at} for deployment {id}: {e}",
+                    "Could not set coding started at to {coding_started_at} for deployment {id}: {e}",
                     id = deployment.id
                 );
             };
             log::info!(
-                "Started processing deployment {id} at {started_at}",
+                "Started processing deployment {id} coding at {coding_started_at}",
                 id = deployment.id
             );
 
@@ -71,6 +74,83 @@ pub async fn execute_pending_deployments(database: Database) {
                 }
             }
 
+            let coding_finished_at = get_time_i64();
+            if let Err(e) = deployment
+                .update_coding_finished_at(&database, coding_finished_at)
+                .await
+            {
+                log::error!(
+                    "Could not set coding finished at to {coding_finished_at} for deployment {id}: {e}",
+                    id = deployment.id
+                );
+            };
+            log::info!(
+                "Finished processing deployment {id} coding at {coding_finished_at}",
+                id = deployment.id
+            );
+
+            let imagegen_started_at = get_time_i64();
+            if let Err(e) = deployment
+                .update_imagegen_started_at(&database, imagegen_started_at)
+                .await
+            {
+                log::error!(
+                    "Could not set imagegen started at to {imagegen_started_at} for deployment {id}: {e}",
+                    id = deployment.id
+                );
+            };
+            log::info!(
+                "Started processing deployment {id} imagegen at {imagegen_started_at}",
+                id = deployment.id
+            );
+
+            // Run imagegen
+
+            let imagegen_finished_at = get_time_i64();
+            if let Err(e) = deployment
+                .update_imagegen_finished_at(&database, imagegen_finished_at)
+                .await
+            {
+                log::error!(
+                    "Could not set imagegen finished at to {imagegen_finished_at} for deployment {id}: {e}",
+                    id = deployment.id
+                );
+            };
+            log::info!(
+                "Finished processing deployment {id} imagegen at {imagegen_finished_at}",
+                id = deployment.id
+            );
+            let mut cli_command = Command::new(format!("{}git", git()));
+            cli_command
+                .arg("-C")
+                .arg(&path)
+                .arg("rev-parse")
+                .arg("HEAD");
+            match cli_command.output() {
+                Ok(output) => match str::from_utf8(&output.stdout) {
+                    Ok(git_hash) => {
+                        if let Err(e) = deployment.update_git_hash(&database, git_hash).await {
+                            log::error!(
+                                "Could not set git hash to {git_hash} for deployment {id}: {e}",
+                                id = deployment.id
+                            );
+                        };
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "Could convert git hash of {path} to utf8 string: {e}",
+                            path = path.display()
+                        );
+                    }
+                },
+                Err(e) => {
+                    log::error!(
+                        "Could not get git hash of {path}: {e}",
+                        path = path.display()
+                    );
+                }
+            }
+
             let mut cli_command = Command::new(format!("{}git", git()));
             cli_command.arg("-C").arg(&path).arg("push");
             if let Err(e) = cli_command.output() {
@@ -79,18 +159,6 @@ pub async fn execute_pending_deployments(database: Database) {
                     path = path.display()
                 );
             }
-
-            let finished_at = get_time_i64();
-            if let Err(e) = deployment.update_finished_at(&database, finished_at).await {
-                log::error!(
-                    "Could not set finished at to {finished_at} for deployment {id}: {e}",
-                    id = deployment.id
-                );
-            };
-            log::info!(
-                "Finished processing deployment {id} at {finished_at}",
-                id = deployment.id
-            );
 
             let project = match DatabaseProject::get_by_name(&database, &deployment.project).await {
                 Ok(project) => match project {

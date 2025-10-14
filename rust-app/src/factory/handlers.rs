@@ -55,7 +55,7 @@ async fn available(
     data: web::Query<Available>,
     req: HttpRequest,
 ) -> impl Responder {
-    let user = match req
+    let _user = match req
         .headers()
         .get("xnode-auth-user")
         .and_then(|header| header.to_str().ok())
@@ -285,8 +285,11 @@ async fn change(
         project: data.project.clone(),
         instructions: data.instructions.clone(),
         submitted_at: get_time_i64(),
-        started_at: None,
-        finished_at: None,
+        coding_started_at: None,
+        coding_finished_at: None,
+        imagegen_started_at: None,
+        imagegen_finished_at: None,
+        git_hash: None,
         deployment_request: None,
     };
     if let Err(e) = deployment.insert(&database).await {
