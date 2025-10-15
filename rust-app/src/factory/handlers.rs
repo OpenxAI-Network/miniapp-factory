@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{fs::read_to_string, process::Command};
 
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use hex::ToHex;
@@ -7,7 +7,7 @@ use regex::Regex;
 use crate::{
     database::{Database, deployments::DatabaseDeployment, projects::DatabaseProject},
     factory::models::{
-        AccountAssociation, Available, BaseBuild, Change, Create, History, User, Version,
+        AccountAssociation, Available, BaseBuild, Change, Create, History, LLMOutput, User, Version,
     },
     utils::{
         auth::get_session,
@@ -652,6 +652,69 @@ async fn base_build(
     };
 
     HttpResponse::Ok().json(deployment_request)
+}
+
+#[get("/project/llm_output")]
+async fn llm_output(
+    database: web::Data<Database>,
+    data: web::Query<LLMOutput>,
+    req: HttpRequest,
+) -> impl Responder {
+    let user = match req
+        .headers()
+        .get("xnode-auth-user")
+        .and_then(|header| header.to_str().ok())
+    {
+        Some(header) => header,
+        _ => {
+            return HttpResponse::Unauthorized().finish();
+        }
+    };
+
+    if !valid_project(&data.project) {
+        return HttpResponse::BadRequest().json(ResponseError::new(format!(
+            "{project} is not a valid project name.",
+            project = data.project
+        )));
+    }
+
+    let project = match DatabaseProject::get_by_name(&database, &data.project).await {
+        Ok(project) => match project {
+            Some(project) => project,
+            None => {
+                return HttpResponse::BadRequest().json(ResponseError::new(format!(
+                    "{project} does not exist.",
+                    project = data.project
+                )));
+            }
+        },
+        Err(e) => {
+            log::error!(
+                "Could not get project {project} from the database: {e}",
+                project = data.project
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+    if project.owner != user {
+        return HttpResponse::Unauthorized().finish();
+    }
+
+    let path = projectsdir()
+        .join(&data.project)
+        .join(".aider.chat.history.md");
+    let llm_output = match read_to_string(&path) {
+        Ok(llm_output) => llm_output,
+        Err(e) => {
+            log::error!(
+                "Could not read llm_output from {path}: {e}",
+                path = path.display()
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    HttpResponse::Ok().json(llm_output)
 }
 
 fn valid_project(project: &str) -> bool {

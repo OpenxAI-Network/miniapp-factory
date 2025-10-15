@@ -46,3 +46,8 @@ pub struct BaseBuild {
     pub project: String,
     pub base_build: projects::BaseBuild,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct LLMOutput {
+    pub project: String,
+}
