@@ -63,6 +63,8 @@ pub async fn execute_pending_deployments(database: Database) {
                     .arg("--auto-test")
                     .arg("--read")
                     .arg(path.join("documentation").join("index.md"))
+                    .arg("--disable-playwright")
+                    .arg("--no-detect-urls")
                     .arg("--message")
                     .arg(&deployment.instructions);
                 if let Err(e) = cli_command.output() {
