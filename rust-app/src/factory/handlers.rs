@@ -705,13 +705,16 @@ async fn llm_output(
         .join(".aider.chat.history.md");
     let llm_output = match read_to_string(&path) {
         Ok(llm_output) => llm_output,
-        Err(e) => {
-            log::error!(
-                "Could not read llm_output from {path}: {e}",
-                path = path.display()
-            );
-            return HttpResponse::InternalServerError().finish();
-        }
+        Err(e) => match e.kind() {
+            std::io::ErrorKind::NotFound => "".to_string(),
+            _ => {
+                log::error!(
+                    "Could not read llm_output from {path}: {e}",
+                    path = path.display()
+                );
+                return HttpResponse::InternalServerError().finish();
+            }
+        },
     };
 
     HttpResponse::Ok().json(llm_output)
