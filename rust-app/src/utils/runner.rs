@@ -54,6 +54,7 @@ pub async fn execute_pending_deployments(database: Database) {
                     .arg("--model-settings-file")
                     .arg(datadir().join(".aider.model.settings.yml"))
                     .arg("--restore-chat-history")
+                    .arg("--no-gitignore")
                     .arg("--test-cmd")
                     .arg(format!(
                         "{npm} i --cwd {path} --no-save && {npm} run --cwd {path} build",
@@ -65,6 +66,7 @@ pub async fn execute_pending_deployments(database: Database) {
                     .arg(path.join("documentation").join("index.md"))
                     .arg("--disable-playwright")
                     .arg("--no-detect-urls")
+                    .arg("--no-suggest-shell-commands")
                     .arg("--message")
                     .arg(&deployment.instructions);
                 if let Err(e) = cli_command.output() {
