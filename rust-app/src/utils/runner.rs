@@ -1,6 +1,6 @@
 use std::{process::Command, time::Duration};
 
-use tokio::time;
+use tokio::time::{self, timeout};
 
 use crate::{
     database::{Database, deployments::DatabaseDeployment, projects::DatabaseProject},
@@ -26,6 +26,12 @@ pub async fn execute_pending_deployments(database: Database) {
         };
 
         if let Some(mut deployment) = deployment {
+            log::info!(
+                "Processing deployment {id} (project {project})",
+                id = deployment.id,
+                project = deployment.project
+            );
+
             let coding_started_at = get_time_i64();
             if let Err(e) = deployment
                 .update_coding_started_at(&database, coding_started_at)
@@ -44,7 +50,7 @@ pub async fn execute_pending_deployments(database: Database) {
             let path = projectsdir().join(&deployment.project);
             {
                 let project_path = path.join("mini-app");
-                let mut cli_command = Command::new(format!("{}aider", aider()));
+                let mut cli_command = tokio::process::Command::new(format!("{}aider", aider()));
                 cli_command
                     .env("OLLAMA_API_BASE", "http://127.0.0.1:11434")
                     .env("HOME", datadir())
@@ -69,12 +75,37 @@ pub async fn execute_pending_deployments(database: Database) {
                     .arg("--no-suggest-shell-commands")
                     .arg("--message")
                     .arg(&deployment.instructions);
-                if let Err(e) = cli_command.output() {
-                    log::error!(
-                        "Could not perform requested change {instructions} on {project}: {e}",
-                        instructions = deployment.instructions,
-                        project = deployment.project
-                    );
+                match cli_command.spawn() {
+                    Ok(mut child) => {
+                        match timeout(Duration::from_secs(20 * 60), child.wait()).await {
+                            Ok(output) => {
+                                if let Err(e) = output {
+                                    log::error!(
+                                        "Could not perform requested change {instructions} on {project}: {e}",
+                                        instructions = deployment.instructions,
+                                        project = deployment.project
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                log::error!(
+                                    "Hit the timeout for requested change {instructions} on {project}: {e}",
+                                    instructions = deployment.instructions,
+                                    project = deployment.project
+                                );
+                                if let Err(e) = child.kill().await {
+                                    log::error!("Could not kill child process: {e}");
+                                }
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "Could not spawn child for requested change {instructions} on {project}: {e}",
+                            instructions = deployment.instructions,
+                            project = deployment.project
+                        );
+                    }
                 }
             }
 
