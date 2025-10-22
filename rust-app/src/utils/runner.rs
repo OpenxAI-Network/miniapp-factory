@@ -1,4 +1,7 @@
-use std::{process::Command, time::Duration};
+use std::{
+    process::{Command, Stdio},
+    time::Duration,
+};
 
 use tokio::time::{self, timeout};
 
@@ -26,12 +29,6 @@ pub async fn execute_pending_deployments(database: Database) {
         };
 
         if let Some(mut deployment) = deployment {
-            log::info!(
-                "Processing deployment {id} (project {project})",
-                id = deployment.id,
-                project = deployment.project
-            );
-
             let coding_started_at = get_time_i64();
             if let Err(e) = deployment
                 .update_coding_started_at(&database, coding_started_at)
@@ -75,7 +72,11 @@ pub async fn execute_pending_deployments(database: Database) {
                     .arg("--no-suggest-shell-commands")
                     .arg("--message")
                     .arg(&deployment.instructions);
-                match cli_command.spawn() {
+                match cli_command
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                {
                     Ok(mut child) => {
                         match timeout(Duration::from_secs(20 * 60), child.wait()).await {
                             Ok(output) => {
