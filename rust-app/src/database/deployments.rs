@@ -54,6 +54,21 @@ impl DatabaseDeployment {
         .await
     }
 
+    pub async fn get_unfinished_count(database: &Database) -> Result<i64, Error> {
+        query_scalar("SELECT COUNT(id) FROM deployments WHERE coding_finished_at IS NULL")
+            .fetch_one(&database.connection)
+            .await
+    }
+
+    pub async fn get_by_id(database: &Database, id: i32) -> Result<Option<Self>, Error> {
+        query_as(
+            "SELECT id, project, instructions, submitted_at, coding_started_at, coding_finished_at, imagegen_started_at, imagegen_finished_at, git_hash, deployment_request FROM deployments WHERE id = $1 LIMIT 1",
+        )
+        .bind(id)
+        .fetch_optional(&database.connection)
+        .await
+    }
+
     pub async fn insert(&mut self, database: &Database) -> Result<(), Error> {
         let id: i32 = query_scalar("INSERT INTO deployments(project, instructions, submitted_at, coding_started_at, coding_finished_at, imagegen_started_at, imagegen_finished_at, git_hash, deployment_request) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id")
             .bind(&self.project)
@@ -76,7 +91,7 @@ impl DatabaseDeployment {
     pub async fn update_coding_started_at(
         &mut self,
         database: &Database,
-        coding_started_at: i64,
+        coding_started_at: Option<i64>,
     ) -> Result<(), Error> {
         query("UPDATE deployments SET coding_started_at = $1 WHERE id = $2;")
             .bind(coding_started_at)
@@ -84,7 +99,7 @@ impl DatabaseDeployment {
             .execute(&database.connection)
             .await?;
 
-        self.coding_started_at = Some(coding_started_at);
+        self.coding_started_at = coding_started_at;
 
         Ok(())
     }
@@ -92,7 +107,7 @@ impl DatabaseDeployment {
     pub async fn update_coding_finished_at(
         &mut self,
         database: &Database,
-        coding_finished_at: i64,
+        coding_finished_at: Option<i64>,
     ) -> Result<(), Error> {
         query("UPDATE deployments SET coding_finished_at = $1 WHERE id = $2;")
             .bind(coding_finished_at)
@@ -100,7 +115,7 @@ impl DatabaseDeployment {
             .execute(&database.connection)
             .await?;
 
-        self.coding_finished_at = Some(coding_finished_at);
+        self.coding_finished_at = coding_finished_at;
 
         Ok(())
     }
@@ -108,7 +123,7 @@ impl DatabaseDeployment {
     pub async fn update_imagegen_started_at(
         &mut self,
         database: &Database,
-        imagegen_started_at: i64,
+        imagegen_started_at: Option<i64>,
     ) -> Result<(), Error> {
         query("UPDATE deployments SET imagegen_started_at = $1 WHERE id = $2;")
             .bind(imagegen_started_at)
@@ -116,7 +131,7 @@ impl DatabaseDeployment {
             .execute(&database.connection)
             .await?;
 
-        self.imagegen_started_at = Some(imagegen_started_at);
+        self.imagegen_started_at = imagegen_started_at;
 
         Ok(())
     }
@@ -124,7 +139,7 @@ impl DatabaseDeployment {
     pub async fn update_imagegen_finished_at(
         &mut self,
         database: &Database,
-        imagegen_finished_at: i64,
+        imagegen_finished_at: Option<i64>,
     ) -> Result<(), Error> {
         query("UPDATE deployments SET imagegen_finished_at = $1 WHERE id = $2;")
             .bind(imagegen_finished_at)
@@ -132,7 +147,7 @@ impl DatabaseDeployment {
             .execute(&database.connection)
             .await?;
 
-        self.imagegen_finished_at = Some(imagegen_finished_at);
+        self.imagegen_finished_at = imagegen_finished_at;
 
         Ok(())
     }
@@ -140,15 +155,15 @@ impl DatabaseDeployment {
     pub async fn update_git_hash(
         &mut self,
         database: &Database,
-        git_hash: &str,
+        git_hash: Option<String>,
     ) -> Result<(), Error> {
         query("UPDATE deployments SET git_hash = $1 WHERE id = $2;")
-            .bind(git_hash)
+            .bind(&git_hash)
             .bind(self.id)
             .execute(&database.connection)
             .await?;
 
-        self.git_hash = Some(git_hash.to_string());
+        self.git_hash = git_hash;
 
         Ok(())
     }
@@ -156,7 +171,7 @@ impl DatabaseDeployment {
     pub async fn update_deployment_request(
         &mut self,
         database: &Database,
-        deployment_request: i64,
+        deployment_request: Option<i64>,
     ) -> Result<(), Error> {
         query("UPDATE deployments SET deployment_request = $1 WHERE id = $2;")
             .bind(deployment_request)
@@ -164,7 +179,7 @@ impl DatabaseDeployment {
             .execute(&database.connection)
             .await?;
 
-        self.deployment_request = Some(deployment_request);
+        self.deployment_request = deployment_request;
 
         Ok(())
     }

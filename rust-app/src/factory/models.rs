@@ -49,5 +49,5 @@ pub struct BaseBuild {
 
 #[derive(Serialize, Deserialize)]
 pub struct LLMOutput {
-    pub project: String,
+    pub deployment: i32,
 }

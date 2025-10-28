@@ -49,57 +49,12 @@ in
         '';
       };
 
-      projectsDir = lib.mkOption {
-        type = lib.types.path;
-        default = "${cfg.dataDir}/projects";
-        example = "/var/lib/miniapp-factory/projects";
-        description = ''
-          The directory to store projects.
-        '';
-      };
-
-      model = lib.mkOption {
-        type = lib.types.str;
-        default = "gpt-oss:20b";
-        example = "qwen3-coder:30b-a3b-fp16";
-        description = ''
-          The Ollama-supported LLM to use for code generation. The full list can be found on https://ollama.com/library
-        '';
-      };
-
       gh = lib.mkOption {
         type = lib.types.package;
         default = pkgs.gh;
         example = pkgs.gh;
         description = ''
           gh equivalent executable to use for project creation.
-        '';
-      };
-
-      git = lib.mkOption {
-        type = lib.types.package;
-        default = pkgs.git;
-        example = pkgs.git;
-        description = ''
-          git equivalent executable to use for project updates.
-        '';
-      };
-
-      npm = lib.mkOption {
-        type = lib.types.package;
-        default = pkgs.bun;
-        example = pkgs.bun;
-        description = ''
-          npm equivalent executable to use for project build testing.
-        '';
-      };
-
-      aider = lib.mkOption {
-        type = lib.types.package;
-        default = pkgs.aider-chat;
-        example = pkgs.aider-chat;
-        description = ''
-          aider equivalent executable to use for code generation.
         '';
       };
 
@@ -129,6 +84,14 @@ in
           '';
         };
       };
+
+      hyperstackapikey = lib.mkOption {
+        type = lib.types.str;
+        example = "7a12411b-0074-4d01-a375-ca91376f0bb8";
+        description = ''
+          The api key to use for hyperstack deployments.
+        '';
+      };
     };
   };
 
@@ -148,14 +111,10 @@ in
         PORT = toString cfg.port;
         RUST_LOG = cfg.verbosity;
         DATADIR = cfg.dataDir;
-        PROJECTSDIR = cfg.projectsDir;
-        MODEL = cfg.model;
         GH_TOKEN = cfg.github-token;
         GH = "${cfg.gh}/bin/";
-        GIT = "${cfg.git}/bin/";
-        NPM = "${lib.getExe cfg.npm}";
-        AIDER = "${cfg.aider}/bin/";
         DATABASE = cfg.database;
+        HYPERSTACKAPIKEY = cfg.hyperstackapikey;
       };
       serviceConfig = {
         ExecStart = "${lib.getExe miniapp-factory}";
@@ -163,23 +122,6 @@ in
         Group = "miniapp-factory";
         StateDirectory = "miniapp-factory";
         Restart = "on-failure";
-      };
-    };
-
-    programs.git = {
-      enable = true;
-      config = {
-        user.name = "Mini App Factory";
-        user.email = "miniapp-factory@openxai.org";
-        github.user = "miniapp-factory";
-        hub.protocol = "ssh";
-        init.defaultBranch = "main";
-        push.autoSetupRemote = true;
-        url."git@github.com:".insteadOf = [
-          "https://github.com/"
-          "github:"
-        ];
-        core.sshCommand = "${pkgs.openssh}/bin/ssh -o StrictHostKeyChecking=no -i /var/lib/miniapp-factory/.ssh/id_ed25519";
       };
     };
 
@@ -198,22 +140,6 @@ in
         fi
       '';
     };
-
-    nixpkgs.config.allowUnfree = true;
-    systemd.services.ollama.serviceConfig.DynamicUser = lib.mkForce false;
-    systemd.services.ollama.serviceConfig.ProtectHome = lib.mkForce false;
-    systemd.services.ollama.serviceConfig.StateDirectory = [ "ollama/models" ];
-    services.ollama = {
-      enable = true;
-      user = "ollama";
-      loadModels = [ cfg.model ];
-      environmentVariables = {
-        OLLAMA_CONTEXT_LENGTH = "8192"; # From https://aider.chat/docs/llms/ollama.html#ollama
-      };
-    };
-    systemd.services.ollama-model-loader.serviceConfig.User = "ollama";
-    systemd.services.ollama-model-loader.serviceConfig.Group = "ollama";
-    systemd.services.ollama-model-loader.serviceConfig.DynamicUser = lib.mkForce false;
 
     services.postgresql = lib.mkIf cfg.postgres.enable {
       enable = true;

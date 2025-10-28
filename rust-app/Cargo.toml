@@ -18,4 +18,5 @@ serde_json = "1"
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres"] }
 tiny-keccak = "2"
 tokio = { version = "1", features = ["full"] }
+xnode-deployer = { version = "1.0", features = ["hyperstack"] }
 xnode-manager-sdk = "1.0"

@@ -1,18 +1,26 @@
-use std::{fs::read_to_string, process::Command};
+use std::process::Command;
 
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use hex::ToHex;
 use regex::Regex;
+use xnode_manager_sdk::{
+    file::{ReadFile, ReadFileInput, ReadFilePath},
+    utils::Output,
+};
 
 use crate::{
-    database::{Database, deployments::DatabaseDeployment, projects::DatabaseProject},
+    database::{
+        Database, coding_servers::DatabaseCodingServer, deployments::DatabaseDeployment,
+        projects::DatabaseProject,
+    },
     factory::models::{
         AccountAssociation, Available, BaseBuild, Change, Create, History, LLMOutput, User, Version,
     },
     utils::{
         auth::get_session,
-        env::{gh, ghtoken, git, projectsdir},
+        env::{gh, ghtoken},
         error::ResponseError,
+        runner::{coding_server_session, deployer},
         time::get_time_i64,
         wallet::get_signer,
     },
@@ -114,7 +122,6 @@ async fn create(
         )));
     }
 
-    let path = projectsdir();
     if !DatabaseProject::get_by_name(&database, &data.project)
         .await
         .is_ok_and(|project| project.is_none())
@@ -138,26 +145,27 @@ async fn create(
 
     let mut cli_command = Command::new(format!("{}gh", gh()));
     cli_command
-        .current_dir(&path)
         .env("GH_TOKEN", ghtoken())
-        .env("PATH", git())
         .arg("repo")
         .arg("create")
         .arg(&data.project)
         .arg("--public")
-        .arg("--clone")
         .arg("--template")
         .arg("OpenxAI-Network/miniapp-factory-template");
     if let Err(e) = cli_command.output() {
         log::error!(
-            "Could create github project {project} for {path}: {e}",
-            project = data.project,
-            path = path.display()
+            "Could create github project {project}: {e}",
+            project = data.project
         );
         return HttpResponse::InternalServerError().finish();
     }
 
-    match get_session("miniapp-host.xnode-manager.openxai.org").await {
+    match get_session(
+        "https://miniapp-host.xnode-manager.openxai.org",
+        "miniapp-host.xnode-manager.openxai.org",
+    )
+    .await
+    {
         Ok(session) => {
             // deploy project container
             if let Err(e) = xnode_manager_sdk::config::set(xnode_manager_sdk::config::SetInput {
@@ -421,7 +429,12 @@ async fn version(
         return HttpResponse::InternalServerError().finish();
     }
 
-    let deployment_request = match get_session("miniapp-host.xnode-manager.openxai.org").await {
+    let deployment_request = match get_session(
+        "https://miniapp-host.xnode-manager.openxai.org",
+        "miniapp-host.xnode-manager.openxai.org",
+    )
+    .await
+    {
         Ok(session) => {
             match xnode_manager_sdk::config::set(xnode_manager_sdk::config::SetInput {
                 session: &session,
@@ -518,7 +531,12 @@ async fn account_association(
         return HttpResponse::InternalServerError().finish();
     }
 
-    let deployment_request = match get_session("miniapp-host.xnode-manager.openxai.org").await {
+    let deployment_request = match get_session(
+        "https://miniapp-host.xnode-manager.openxai.org",
+        "miniapp-host.xnode-manager.openxai.org",
+    )
+    .await
+    {
         Ok(session) => {
             match xnode_manager_sdk::config::set(xnode_manager_sdk::config::SetInput {
                 session: &session,
@@ -615,7 +633,12 @@ async fn base_build(
         return HttpResponse::InternalServerError().finish();
     }
 
-    let deployment_request = match get_session("miniapp-host.xnode-manager.openxai.org").await {
+    let deployment_request = match get_session(
+        "https://miniapp-host.xnode-manager.openxai.org",
+        "miniapp-host.xnode-manager.openxai.org",
+    )
+    .await
+    {
         Ok(session) => {
             match xnode_manager_sdk::config::set(xnode_manager_sdk::config::SetInput {
                 session: &session,
@@ -671,27 +694,36 @@ async fn llm_output(
         }
     };
 
-    if !valid_project(&data.project) {
-        return HttpResponse::BadRequest().json(ResponseError::new(format!(
-            "{project} is not a valid project name.",
-            project = data.project
-        )));
-    }
+    let deployment = match DatabaseDeployment::get_by_id(&database, data.deployment).await {
+        Ok(deployment) => match deployment {
+            Some(deployment) => deployment,
+            None => {
+                return HttpResponse::NotFound().finish();
+            }
+        },
+        Err(e) => {
+            log::error!(
+                "Could not get deployment {deployment} from the database: {e}",
+                deployment = data.deployment
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
 
-    let project = match DatabaseProject::get_by_name(&database, &data.project).await {
+    let project = match DatabaseProject::get_by_name(&database, &deployment.project).await {
         Ok(project) => match project {
             Some(project) => project,
             None => {
                 return HttpResponse::BadRequest().json(ResponseError::new(format!(
                     "{project} does not exist.",
-                    project = data.project
+                    project = deployment.project
                 )));
             }
         },
         Err(e) => {
             log::error!(
                 "Could not get project {project} from the database: {e}",
-                project = data.project
+                project = deployment.project
             );
             return HttpResponse::InternalServerError().finish();
         }
@@ -700,21 +732,50 @@ async fn llm_output(
         return HttpResponse::Unauthorized().finish();
     }
 
-    let path = projectsdir()
-        .join(&data.project)
-        .join(".aider.chat.history.md");
-    let llm_output = match read_to_string(&path) {
-        Ok(llm_output) => llm_output,
-        Err(e) => match e.kind() {
-            std::io::ErrorKind::NotFound => "".to_string(),
-            _ => {
-                log::error!(
-                    "Could not read llm_output from {path}: {e}",
-                    path = path.display()
-                );
-                return HttpResponse::InternalServerError().finish();
+    let server = match DatabaseCodingServer::get_by_assignment(&database, Some(data.deployment))
+        .await
+    {
+        Ok(server) => server,
+        Err(e) => {
+            log::error!(
+                "Could not get coding server assigned deployment {deployment} from the database: {e}",
+                deployment = data.deployment
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    let llm_output = match server {
+        Some(server) => match coding_server_session(&deployer(), &server).await {
+            Some(session) => {
+                match xnode_manager_sdk::file::read_file(ReadFileInput {
+                    session: &session,
+                    path: ReadFilePath {
+                        scope: "container:miniapp-factory-coder".to_string(),
+                    },
+                    query: ReadFile {
+                        path: format!(
+                            "/var/lib/miniapp-factory-coder/projects/{project}/.aider.chat.history.md",
+                            project = deployment.project
+                        ),
+                    },
+                }).await {
+                    Ok(chat) => {match chat.content {
+                        Output::UTF8 { output } => output,
+                        Output::Bytes { output: _ } => {
+                        log::warn!("Got bytes reading {project} chat from {server}", project = deployment.project, server = server.id);
+                            "".to_string()
+                        },
+                    }},
+                    Err(e) => {
+                        log::warn!("Error reading {project} chat from {server}: {e:?}", project = deployment.project, server = server.id);
+                        "".to_string()
+                    },
+                }
             }
+            None => "".to_string(),
         },
+        None => "".to_string(),
     };
 
     HttpResponse::Ok().json(llm_output)

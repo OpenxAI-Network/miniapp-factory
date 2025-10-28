@@ -1,4 +1,4 @@
-use std::fs::{create_dir_all, write};
+use std::fs::create_dir_all;
 
 use actix_web::{App, HttpServer, web};
 use tokio::{spawn, try_join};
@@ -6,8 +6,8 @@ use tokio::{spawn, try_join};
 use crate::{
     database::Database,
     utils::{
-        env::{datadir, hostname, model, port, projectsdir},
-        runner::execute_pending_deployments,
+        env::{datadir, hostname, port},
+        runner::{execute_pending_deployments, finish_deployment_coding, manage_coding_servers},
     },
 };
 
@@ -29,39 +29,13 @@ async fn main() {
             )
         };
     }
-    {
-        let dir = projectsdir();
-        if let Err(e) = create_dir_all(&dir) {
-            log::error!(
-                "Could not create projects dir at {dir}: {e}",
-                dir = dir.display()
-            )
-        };
-    }
-
-    // Write settings
-    {
-        let path = datadir().join(".aider.model.settings.yml");
-        if let Err(e) = write(
-            &path,
-            format!(
-                "\
-- name: ollama_chat/{model}
-    ",
-                model = model()
-            ),
-        ) {
-            log::error!(
-                "Could not set model settings at {path}: {e}",
-                path = path.display()
-            )
-        };
-    }
 
     let database = Database::new().await;
 
     if let Err(e) = try_join!(
+        spawn(manage_coding_servers(database.clone())),
         spawn(execute_pending_deployments(database.clone())),
+        spawn(finish_deployment_coding(database.clone())),
         spawn(
             HttpServer::new(move || {
                 App::new()
