@@ -11,9 +11,11 @@ use xnode_deployer::{
 use xnode_manager_sdk::{
     config::{ContainerChange, ContainerSettings, SetInput, SetPath},
     file::{
-        CreateDirectory, CreateDirectoryInput, CreateDirectoryPath, ReadFile, ReadFileInput,
-        ReadFilePath, WriteFile, WriteFileInput, WriteFilePath,
+        CreateDirectory, CreateDirectoryInput, CreateDirectoryPath, Entity, Permission, ReadFile,
+        ReadFileInput, ReadFilePath, SetPermissions, SetPermissionsInput, SetPermissionsPath,
+        WriteFile, WriteFileInput, WriteFilePath,
     },
+    info::{GroupsInput, GroupsPath, UsersInput, UsersPath},
     process::{ExecuteInput, ExecutePath, ListInput, ListPath, ProcessCommand},
     request::{RequestIdResult, RequestInfoInput, RequestInfoPath},
 };
@@ -132,11 +134,90 @@ pub async fn manage_coding_servers(database: Database) {
                                                     },
                                                 },
                                             ).await {
-                                                log::warn!("Couldn't write ssh key: {e:?}");
+                                                log::warn!("Couldn't write ssh key on server {server}: {e:?}", server = server.id);
+                                            }
+
+                                            let user = match xnode_manager_sdk::info::users(
+                                                UsersInput::new_with_path(
+                                                    &session,
+                                                    UsersPath {
+                                                        scope: "container:miniapp-factory-coder"
+                                                            .to_string(),
+                                                    },
+                                                ),
+                                            )
+                                            .await
+                                            {
+                                                Ok(users) => users.into_iter().find(|user| {
+                                                    user.name == "miniapp-factory-coder"
+                                                }),
+                                                Err(e) => {
+                                                    log::warn!(
+                                                        "Couldn't get users of server {server}: {e:?}",
+                                                        server = server.id
+                                                    );
+                                                    None
+                                                }
+                                            };
+
+                                            let group = match xnode_manager_sdk::info::groups(
+                                                GroupsInput::new_with_path(
+                                                    &session,
+                                                    GroupsPath {
+                                                        scope: "container:miniapp-factory-coder"
+                                                            .to_string(),
+                                                    },
+                                                ),
+                                            )
+                                            .await
+                                            {
+                                                Ok(groups) => groups.into_iter().find(|group| {
+                                                    group.name == "miniapp-factory-coder"
+                                                }),
+                                                Err(e) => {
+                                                    log::warn!(
+                                                        "Couldn't get groups of server {server}: {e:?}",
+                                                        server = server.id
+                                                    );
+                                                    None
+                                                }
+                                            };
+
+                                            if let Err(e) = xnode_manager_sdk::file::set_permissions(
+                                                SetPermissionsInput {
+                                                    session: &session,
+                                                    path: SetPermissionsPath {
+                                                        scope: "container:miniapp-factory-coder".to_string(),
+                                                    },
+                                                    data: SetPermissions {
+                                                        path: "/var/lib/miniapp-factory-coder/.ssh/id_ed25519".to_string(),
+                                                        permissions: vec![Permission {
+                                                            granted_to: Entity::User(user.map(|user| user.id).unwrap_or_default()),
+                                                            read: true,
+                                                            write: false,
+                                                            execute: false,
+                                                        }, Permission {
+                                                            granted_to: Entity::Group(group.map(|group| group.id).unwrap_or_default()),
+                                                            read: false,
+                                                            write: false,
+                                                            execute: false,
+                                                        }, Permission {
+                                                            granted_to: Entity::Any,
+                                                            read: false,
+                                                            write: false,
+                                                            execute: false,
+                                                        }]
+                                                    },
+                                                },
+                                            ).await {
+                                                log::warn!("Couldn't set ssh key permissions on server {server}: {e:?}", server = server.id);
                                             }
                                         }
                                         Err(e) => {
-                                            log::warn!("Couldn't read ssh key: {e}");
+                                            log::warn!(
+                                                "Couldn't read ssh key on server {server}: {e}",
+                                                server = server.id
+                                            );
                                         }
                                     };
 
