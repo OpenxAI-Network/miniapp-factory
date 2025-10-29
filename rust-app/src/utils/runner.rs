@@ -67,7 +67,7 @@ pub fn new_deployer() -> HyperstackDeployer {
 
 pub async fn manage_coding_servers(database: Database) {
     let deployer = new_deployer();
-    let mut interval = time::interval(Duration::from_secs(60)); // 1 minute
+    let mut interval = time::interval(Duration::from_secs(15));
 
     loop {
         interval.tick().await;
@@ -497,7 +497,7 @@ services.xserver.videoDrivers = [ \"nvidia\" ];\
 
 pub async fn execute_pending_deployments(database: Database) {
     let deployer = new_deployer();
-    let mut interval = time::interval(Duration::from_secs(1)); // 1 second
+    let mut interval = time::interval(Duration::from_secs(1));
 
     loop {
         interval.tick().await;
@@ -653,7 +653,7 @@ pub async fn execute_pending_deployments(database: Database) {
 
 pub async fn finish_deployment_coding(database: Database) {
     let deployer = new_deployer();
-    let mut interval = time::interval(Duration::from_secs(10)); // 10 second
+    let mut interval = time::interval(Duration::from_secs(5));
 
     loop {
         interval.tick().await;
