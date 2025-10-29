@@ -14,6 +14,7 @@ use crate::{
 mod database;
 mod factory;
 mod utils;
+mod waitlist;
 
 #[tokio::main]
 async fn main() {
@@ -41,6 +42,7 @@ async fn main() {
                 App::new()
                     .app_data(web::Data::new(database.clone()))
                     .service(web::scope("/api/factory").configure(factory::configure))
+                    .service(web::scope("/api/waitlist").configure(waitlist::configure))
             })
             .bind(format!(
                 "{hostname}:{port}",
