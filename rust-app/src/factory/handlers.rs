@@ -20,7 +20,7 @@ use crate::{
         auth::get_session,
         env::{gh, ghtoken},
         error::ResponseError,
-        runner::{coding_server_session, deployer},
+        runner::{coding_server_session, new_deployer},
         time::get_time_i64,
         wallet::get_signer,
     },
@@ -746,7 +746,7 @@ async fn llm_output(
     };
 
     let llm_output = match server {
-        Some(server) => match coding_server_session(&deployer(), &server).await {
+        Some(server) => match coding_server_session(&new_deployer(), &server).await {
             Some(session) => {
                 match xnode_manager_sdk::file::read_file(ReadFileInput {
                     session: &session,

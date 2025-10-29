@@ -54,8 +54,8 @@ impl DatabaseDeployment {
         .await
     }
 
-    pub async fn get_unfinished_count(database: &Database) -> Result<i64, Error> {
-        query_scalar("SELECT COUNT(id) FROM deployments WHERE coding_finished_at IS NULL")
+    pub async fn get_queued_count(database: &Database) -> Result<i64, Error> {
+        query_scalar("SELECT COUNT(id) FROM deployments WHERE coding_started_at IS NULL")
             .fetch_one(&database.connection)
             .await
     }

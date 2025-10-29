@@ -1,6 +1,7 @@
 use std::{fs::read, time::Duration};
 
 use hex::ToHex;
+use rand::{Rng, distr::Alphanumeric};
 use serde::{Deserialize, Serialize};
 use sqlx::types::Json;
 use tokio::time;
@@ -45,11 +46,18 @@ pub struct Output {
     git_hash: String,
 }
 
-pub fn deployer() -> HyperstackDeployer {
+pub fn new_deployer() -> HyperstackDeployer {
     HyperstackDeployer::new(
         hyperstackapikey(),
         HyperstackHardware::VirtualMachine {
-            name: "miniapp-factory-coder".to_string(),
+            name: format!(
+                "miniapp-factory-coder-{random}",
+                random = rand::rng()
+                    .sample_iter(&Alphanumeric)
+                    .take(10)
+                    .map(char::from)
+                    .collect::<String>()
+            ),
             environment_name: "default-NORWAY-1".to_string(),
             flavor_name: "n3-RTX-A4000x1".to_string(),
             key_name: "NixOS".to_string(),
@@ -58,7 +66,7 @@ pub fn deployer() -> HyperstackDeployer {
 }
 
 pub async fn manage_coding_servers(database: Database) {
-    let deployer = deployer();
+    let deployer = new_deployer();
     let mut interval = time::interval(Duration::from_secs(60)); // 1 minute
 
     loop {
@@ -110,7 +118,10 @@ pub async fn manage_coding_servers(database: Database) {
                                             if processes.iter().any(|process| {
                                                 process.name == "ollama-model-loader.service"
                                             }) {
-                                                // downloading models
+                                                log::info!(
+                                                    "Waiting for server {server} to finish ollama download",
+                                                    server = server.id
+                                                );
                                                 continue;
                                             }
                                         }
@@ -123,6 +134,10 @@ pub async fn manage_coding_servers(database: Database) {
                                         }
                                     };
 
+                                    log::info!(
+                                        "Finishing setup on server {server}",
+                                        server = server.id
+                                    );
                                     match read(datadir().join(".ssh").join("id_ed25519")) {
                                         Ok(ssh_key) => {
                                             if let Err(e) =
@@ -257,6 +272,11 @@ pub async fn manage_coding_servers(database: Database) {
                                             server = server.id
                                         );
                                     }
+                                } else {
+                                    log::info!(
+                                        "Waiting for server {server} to finish container deployment",
+                                        server = server.id
+                                    );
                                 }
                             }
                             Err(e) => {
@@ -267,6 +287,7 @@ pub async fn manage_coding_servers(database: Database) {
                             }
                         };
                     } else {
+                        log::info!("Deploying container on server {server}", server = server.id);
                         match xnode_manager_sdk::config::set(SetInput {
                             session: &session,
                             path: SetPath {
@@ -370,9 +391,9 @@ pub async fn manage_coding_servers(database: Database) {
             }
         }
 
-        match DatabaseDeployment::get_unfinished_count(&database).await {
-            Ok(unfinished) => {
-                if unfinished == 0 {
+        match DatabaseDeployment::get_queued_count(&database).await {
+            Ok(queued) => {
+                if queued == 0 {
                     // undeploy all servers that aren't assigned anything
                     match DatabaseCodingServer::get_all_dynamic_unassigned(&database).await {
                         Ok(servers) => {
@@ -404,11 +425,11 @@ pub async fn manage_coding_servers(database: Database) {
                     // deploy more servers if exceeds 3*current servers
                     match DatabaseCodingServer::get_count(&database).await {
                         Ok(coding_servers) => {
-                            let extra_servers = (unfinished / 3) - (coding_servers - 1);
+                            let extra_servers = (queued / 3) - (coding_servers - 1);
                             if extra_servers > 0 {
                                 let addr: String = get_signer().public().address().encode_hex();
                                 for _ in 0..extra_servers {
-                                    let hardware = match deployer
+                                    let hardware = match new_deployer()
                                         .deploy(DeployInput {
                                             acme_email: None,
                                             domain: None,
@@ -475,7 +496,7 @@ services.xserver.videoDrivers = [ \"nvidia\" ];\
 }
 
 pub async fn execute_pending_deployments(database: Database) {
-    let deployer = deployer();
+    let deployer = new_deployer();
     let mut interval = time::interval(Duration::from_secs(1)); // 1 second
 
     loop {
@@ -514,8 +535,10 @@ pub async fn execute_pending_deployments(database: Database) {
                 );
             };
             log::info!(
-                "Started processing deployment {id} coding at {coding_started_at}",
-                id = deployment.id
+                "Started processing deployment {id} (project {project}) coding at {coding_started_at} on server {server}",
+                id = deployment.id,
+                project = deployment.project,
+                server = server.id
             );
 
             let project = match DatabaseProject::get_by_name(&database, &deployment.project).await {
@@ -629,7 +652,7 @@ pub async fn execute_pending_deployments(database: Database) {
 }
 
 pub async fn finish_deployment_coding(database: Database) {
-    let deployer = deployer();
+    let deployer = new_deployer();
     let mut interval = time::interval(Duration::from_secs(10)); // 10 second
 
     loop {
