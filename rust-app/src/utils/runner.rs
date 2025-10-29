@@ -118,10 +118,7 @@ pub async fn manage_coding_servers(database: Database) {
                                             if processes.iter().any(|process| {
                                                 process.name == "ollama-model-loader.service"
                                             }) {
-                                                log::info!(
-                                                    "Waiting for server {server} to finish ollama download",
-                                                    server = server.id
-                                                );
+                                                // wait for ollama download to finish
                                                 continue;
                                             }
                                         }
@@ -272,11 +269,6 @@ pub async fn manage_coding_servers(database: Database) {
                                             server = server.id
                                         );
                                     }
-                                } else {
-                                    log::info!(
-                                        "Waiting for server {server} to finish container deployment",
-                                        server = server.id
-                                    );
                                 }
                             }
                             Err(e) => {
@@ -287,7 +279,6 @@ pub async fn manage_coding_servers(database: Database) {
                             }
                         };
                     } else {
-                        log::info!("Deploying container on server {server}", server = server.id);
                         match xnode_manager_sdk::config::set(SetInput {
                             session: &session,
                             path: SetPath {
@@ -362,6 +353,10 @@ pub async fn manage_coding_servers(database: Database) {
                         .await
                         {
                             Ok(request) => {
+                                log::info!(
+                                    "Deployed container on server {server}",
+                                    server = server.id
+                                );
                                 if let Err(e) = server
                                     .update_container_deployment(
                                         &database,
@@ -376,11 +371,8 @@ pub async fn manage_coding_servers(database: Database) {
                                     );
                                 }
                             }
-                            Err(e) => {
-                                log::error!(
-                                    "Could not deploy container on server {server}: {e:?}",
-                                    server = server.id
-                                );
+                            Err(_) => {
+                                // container deployment is expected to fail until OS is installed
                             }
                         }
                     }
