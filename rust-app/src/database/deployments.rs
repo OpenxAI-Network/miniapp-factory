@@ -48,7 +48,7 @@ impl DatabaseDeployment {
 
     pub async fn get_next_unfinished(database: &Database) -> Result<Option<Self>, Error> {
         query_as(
-            "SELECT id, project, instructions, submitted_at, coding_started_at, coding_finished_at, imagegen_started_at, imagegen_finished_at, git_hash, deployment_request FROM deployments WHERE coding_finished_at IS NULL ORDER BY id ASC LIMIT 1",
+            "SELECT id, project, instructions, submitted_at, coding_started_at, coding_finished_at, imagegen_started_at, imagegen_finished_at, git_hash, deployment_request FROM deployments WHERE coding_started_at IS NULL ORDER BY id ASC LIMIT 1",
         )
         .fetch_optional(&database.connection)
         .await

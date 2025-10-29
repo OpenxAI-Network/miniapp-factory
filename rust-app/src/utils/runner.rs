@@ -95,6 +95,34 @@ pub async fn manage_coding_servers(database: Database) {
                                 if request_info.result.is_some_and(|result| {
                                     matches!(result, RequestIdResult::Success { body: _ })
                                 }) {
+                                    match xnode_manager_sdk::process::list(
+                                        ListInput::new_with_path(
+                                            &session,
+                                            ListPath {
+                                                scope: "container:miniapp-factory-coder"
+                                                    .to_string(),
+                                            },
+                                        ),
+                                    )
+                                    .await
+                                    {
+                                        Ok(processes) => {
+                                            if processes.iter().any(|process| {
+                                                process.name == "ollama-model-loader.service"
+                                            }) {
+                                                // downloading models
+                                                continue;
+                                            }
+                                        }
+                                        Err(e) => {
+                                            log::error!(
+                                                "Could not get processes of server {server}: {e:?}",
+                                                server = server.id
+                                            );
+                                            continue;
+                                        }
+                                    };
+
                                     match read(datadir().join(".ssh").join("id_ed25519")) {
                                         Ok(ssh_key) => {
                                             if let Err(e) =
