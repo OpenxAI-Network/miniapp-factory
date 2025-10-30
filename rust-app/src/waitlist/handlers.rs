@@ -1,5 +1,28 @@
-use crate::database::{Database, waitlist::DatabaseWaitlist};
+use crate::{
+    database::{Database, waitlist::DatabaseWaitlist},
+    utils::time::get_time_i64,
+    waitlist::models::PublicWaitlist,
+};
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
+
+#[get("/all")]
+async fn all(database: web::Data<Database>) -> impl Responder {
+    match DatabaseWaitlist::get_all(&database).await {
+        Ok(waitlist) => HttpResponse::Ok().json(
+            waitlist
+                .into_iter()
+                .map(|waitlist| PublicWaitlist {
+                    account: waitlist.account,
+                    date: waitlist.date,
+                })
+                .collect::<Vec<PublicWaitlist>>(),
+        ),
+        Err(e) => {
+            log::warn!("Couldn't get public waitlist: {e}");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
 
 #[get("/allowed")]
 async fn allowed(database: web::Data<Database>, req: HttpRequest) -> impl Responder {
@@ -60,7 +83,12 @@ async fn enroll(
         }
     }
 
-    let mut waitlist = DatabaseWaitlist { id: 0, account, ip };
+    let mut waitlist = DatabaseWaitlist {
+        id: 0,
+        account,
+        ip,
+        date: get_time_i64(),
+    };
     if let Err(e) = waitlist.insert(&database).await {
         log::warn!("Couldn't insert waitlist {waitlist:?}: {e}");
         return HttpResponse::InternalServerError().finish();
