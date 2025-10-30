@@ -5,7 +5,7 @@ use crate::database::{Database, DatabaseConnection};
 
 pub async fn create_table(connection: &DatabaseConnection) {
     sqlx::raw_sql(
-        "CREATE TABLE IF NOT EXISTS waitlist(id SERIAL PRIMARY KEY, account TEXT NOT NULL, ip TEXT UNIQUE NOT NULL, date INT8 NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS waitlist(id SERIAL PRIMARY KEY, account TEXT UNIQUE NOT NULL, ip TEXT UNIQUE NOT NULL, date INT8 NOT NULL)",
     )
     .execute(connection)
     .await
@@ -34,7 +34,6 @@ impl DatabaseWaitlist {
             .await
     }
 
-    #[allow(dead_code)]
     pub async fn get_by_ip(database: &Database, ip: &str) -> Result<Option<Self>, Error> {
         query_as("SELECT id, account, ip, date FROM waitlist WHERE ip = $1")
             .bind(ip)
@@ -48,7 +47,7 @@ impl DatabaseWaitlist {
         )
         .bind(&self.account)
         .bind(&self.ip)
-        .bind(&self.date)
+        .bind(self.date)
         .fetch_one(&database.connection)
         .await?;
 

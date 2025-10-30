@@ -83,6 +83,18 @@ async fn enroll(
         }
     }
 
+    match DatabaseWaitlist::get_by_account(&database, &account).await {
+        Ok(waitlist) => {
+            if waitlist.is_some() {
+                return HttpResponse::Forbidden().finish();
+            }
+        }
+        Err(e) => {
+            log::warn!("Couldn't get waitlist for account {account}: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    }
+
     let mut waitlist = DatabaseWaitlist {
         id: 0,
         account,
