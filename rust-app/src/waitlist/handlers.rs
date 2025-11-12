@@ -46,15 +46,18 @@ async fn allowed(database: web::Data<Database>, req: HttpRequest) -> impl Respon
 async fn position(database: web::Data<Database>, path: web::Path<String>) -> impl Responder {
     let account = path.into_inner();
 
-    let waitlist = match DatabaseWaitlist::get_by_account(&database, &account).await {
-        Ok(waitlist) => waitlist,
+    let waitlist = match DatabaseWaitlist::get_all(&database).await {
+        Ok(waitlist) => waitlist
+            .into_iter()
+            .enumerate()
+            .find(|(_, waitlist)| waitlist.account == account),
         Err(e) => {
             log::warn!("Couldn't get waitlist for account {account}: {e}");
             return HttpResponse::InternalServerError().finish();
         }
     };
 
-    HttpResponse::Ok().json(waitlist.map(|waitlist| waitlist.id).unwrap_or(-1))
+    HttpResponse::Ok().json(waitlist.map(|(position, _)| position + 1).unwrap_or(0))
 }
 
 #[post("/{account}/enroll")]
