@@ -76,7 +76,7 @@ pub fn new_deployer() -> HyperstackDeployer {
 }
 
 pub async fn manage_coding_servers(database: Database) {
-    let mut interval = time::interval(Duration::from_secs(15));
+    let mut interval = time::interval(Duration::from_secs(10));
 
     loop {
         interval.tick().await;
@@ -220,7 +220,7 @@ pub async fn manage_coding_servers(database: Database) {
 }
 
 pub async fn execute_pending_deployments(database: Database) {
-    let mut interval = time::interval(Duration::from_secs(1));
+    let mut interval = time::interval(Duration::from_millis(500));
 
     loop {
         interval.tick().await;
@@ -264,7 +264,7 @@ pub async fn execute_pending_deployments(database: Database) {
 }
 
 pub async fn finish_deployment(database: Database) {
-    let mut interval = time::interval(Duration::from_secs(5));
+    let mut interval = time::interval(Duration::from_secs(2));
 
     loop {
         interval.tick().await;
