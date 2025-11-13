@@ -6,7 +6,7 @@ use crate::database::{Database, DatabaseConnection};
 
 pub async fn create_table(connection: &DatabaseConnection) {
     sqlx::raw_sql(
-        "CREATE TABLE IF NOT EXISTS coding_servers(id SERIAL PRIMARY KEY, hardware JSON NOT NULL, container_deployment INT8, setup_finished BOOL NOT NULL, assignment INT4, dynamic BOOL NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS worker_servers(id SERIAL PRIMARY KEY, hardware JSON NOT NULL, coder_deployment INT8, imagegen_deployment INT8, setup_finished BOOL NOT NULL, assignment INT4, dynamic BOOL NOT NULL)",
     )
     .execute(connection)
     .await
@@ -14,32 +14,33 @@ pub async fn create_table(connection: &DatabaseConnection) {
 }
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]
-pub struct DatabaseCodingServer {
+pub struct DatabaseWorkerServer {
     pub id: i32,
     pub hardware: Json<HyperstackOutput>,
-    pub container_deployment: Option<i64>,
+    pub coder_deployment: Option<i64>,
+    pub imagegen_deployment: Option<i64>,
     pub setup_finished: bool,
     pub assignment: Option<i32>,
     pub dynamic: bool,
 }
 
-impl DatabaseCodingServer {
+impl DatabaseWorkerServer {
     #[allow(dead_code)]
     pub async fn get_all(database: &Database) -> Result<Vec<Self>, Error> {
-        query_as("SELECT id, hardware, container_deployment, setup_finished, assignment, dynamic FROM coding_servers")
+        query_as("SELECT id, hardware, coder_deployment, imagegen_deployment, setup_finished, assignment, dynamic FROM worker_servers")
             .fetch_all(&database.connection)
             .await
     }
 
     pub async fn get_count(database: &Database) -> Result<i64, Error> {
-        query_scalar("SELECT COUNT(id) FROM coding_servers")
+        query_scalar("SELECT COUNT(id) FROM worker_servers")
             .fetch_one(&database.connection)
             .await
     }
 
     pub async fn get_all_no_setup_finished(database: &Database) -> Result<Vec<Self>, Error> {
         query_as(
-            "SELECT id, hardware, container_deployment, setup_finished, assignment, dynamic FROM coding_servers WHERE setup_finished = FALSE",
+            "SELECT id, hardware, coder_deployment, imagegen_deployment, setup_finished, assignment, dynamic FROM worker_servers WHERE setup_finished = FALSE",
         )
         .fetch_all(&database.connection)
         .await
@@ -47,7 +48,7 @@ impl DatabaseCodingServer {
 
     pub async fn get_all_dynamic_unassigned(database: &Database) -> Result<Vec<Self>, Error> {
         query_as(
-            "SELECT id, hardware, container_deployment, setup_finished, assignment, dynamic FROM coding_servers WHERE dynamic = TRUE AND assignment IS NULL",
+            "SELECT id, hardware, coder_deployment, imagegen_deployment, setup_finished, assignment, dynamic FROM worker_servers WHERE dynamic = TRUE AND assignment IS NULL",
         )
         .fetch_all(&database.connection)
         .await
@@ -55,7 +56,7 @@ impl DatabaseCodingServer {
 
     pub async fn get_all_assigned(database: &Database) -> Result<Vec<Self>, Error> {
         query_as(
-            "SELECT id, hardware, container_deployment, setup_finished, assignment, dynamic FROM coding_servers WHERE assignment IS NOT NULL",
+            "SELECT id, hardware, coder_deployment, imagegen_deployment, setup_finished, assignment, dynamic FROM worker_servers WHERE assignment IS NOT NULL",
         )
         .fetch_all(&database.connection)
         .await
@@ -63,7 +64,7 @@ impl DatabaseCodingServer {
 
     pub async fn get_available(database: &Database) -> Result<Option<Self>, Error> {
         query_as(
-            "SELECT id, hardware, container_deployment, setup_finished, assignment, dynamic FROM coding_servers WHERE setup_finished = TRUE AND assignment IS NULL LIMIT 1",
+            "SELECT id, hardware, coder_deployment, imagegen_deployment, setup_finished, assignment, dynamic FROM worker_servers WHERE setup_finished = TRUE AND assignment IS NULL LIMIT 1",
         )
         .fetch_optional(&database.connection)
         .await
@@ -74,16 +75,17 @@ impl DatabaseCodingServer {
         assignment: Option<i32>,
     ) -> Result<Option<Self>, Error> {
         query_as(
-            "SELECT id, hardware, container_deployment, setup_finished, assignment, dynamic FROM coding_servers WHERE assignment = $1 LIMIT 1",
+            "SELECT id, hardware, coder_deployment, imagegen_deployment, setup_finished, assignment, dynamic FROM worker_servers WHERE assignment = $1 LIMIT 1",
         ).bind(assignment)
         .fetch_optional(&database.connection)
         .await
     }
 
     pub async fn insert(&mut self, database: &Database) -> Result<(), Error> {
-        let id: i32 = query_scalar("INSERT INTO coding_servers(hardware, container_deployment, setup_finished, assignment, dynamic) VALUES ($1, $2, $3, $4, $5) RETURNING id")
+        let id: i32 = query_scalar("INSERT INTO worker_servers(hardware, coder_deployment, imagegen_deployment, setup_finished, assignment, dynamic) VALUES ($1, $2, $3, $4, $5) RETURNING id")
             .bind(&self.hardware)
-            .bind(self.container_deployment)
+            .bind(self.coder_deployment)
+            .bind(self.imagegen_deployment)
             .bind(self.setup_finished)
             .bind(self.assignment)
             .bind(self.dynamic)
@@ -95,18 +97,34 @@ impl DatabaseCodingServer {
         Ok(())
     }
 
-    pub async fn update_container_deployment(
+    pub async fn update_coder_deployment(
         &mut self,
         database: &Database,
-        container_deployment: Option<i64>,
+        coder_deployment: Option<i64>,
     ) -> Result<(), Error> {
-        query("UPDATE coding_servers SET container_deployment = $1 WHERE id = $2;")
-            .bind(container_deployment)
+        query("UPDATE worker_servers SET coder_deployment = $1 WHERE id = $2;")
+            .bind(coder_deployment)
             .bind(self.id)
             .execute(&database.connection)
             .await?;
 
-        self.container_deployment = container_deployment;
+        self.coder_deployment = coder_deployment;
+
+        Ok(())
+    }
+
+    pub async fn update_imagegen_deployment(
+        &mut self,
+        database: &Database,
+        imagegen_deployment: Option<i64>,
+    ) -> Result<(), Error> {
+        query("UPDATE worker_servers SET imagegen_deployment = $1 WHERE id = $2;")
+            .bind(imagegen_deployment)
+            .bind(self.id)
+            .execute(&database.connection)
+            .await?;
+
+        self.imagegen_deployment = imagegen_deployment;
 
         Ok(())
     }
@@ -116,7 +134,7 @@ impl DatabaseCodingServer {
         database: &Database,
         setup_finished: bool,
     ) -> Result<(), Error> {
-        query("UPDATE coding_servers SET setup_finished = $1 WHERE id = $2;")
+        query("UPDATE worker_servers SET setup_finished = $1 WHERE id = $2;")
             .bind(setup_finished)
             .bind(self.id)
             .execute(&database.connection)
@@ -132,7 +150,7 @@ impl DatabaseCodingServer {
         database: &Database,
         assignment: Option<i32>,
     ) -> Result<(), Error> {
-        query("UPDATE coding_servers SET assignment = $1 WHERE id = $2;")
+        query("UPDATE worker_servers SET assignment = $1 WHERE id = $2;")
             .bind(assignment)
             .bind(self.id)
             .execute(&database.connection)
@@ -144,7 +162,7 @@ impl DatabaseCodingServer {
     }
 
     pub async fn delete(self, database: &Database) -> Result<(), Error> {
-        query("DELETE FROM coding_servers WHERE id = $1;")
+        query("DELETE FROM worker_servers WHERE id = $1;")
             .bind(self.id)
             .execute(&database.connection)
             .await?;

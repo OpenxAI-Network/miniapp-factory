@@ -5,13 +5,14 @@ use hex::ToHex;
 use regex::Regex;
 use xnode_manager_sdk::{
     file::{ReadFile, ReadFileInput, ReadFilePath},
+    process::{LogQuery, LogsInput, LogsPath},
     utils::Output,
 };
 
 use crate::{
     database::{
-        Database, coding_servers::DatabaseCodingServer, deployments::DatabaseDeployment,
-        projects::DatabaseProject,
+        Database, credits::DatabaseCredits, deployments::DatabaseDeployment,
+        projects::DatabaseProject, worker_servers::DatabaseWorkerServer,
     },
     factory::models::{
         AccountAssociation, Available, BaseBuild, Change, Create, History, LLMOutput, User, Version,
@@ -20,7 +21,7 @@ use crate::{
         auth::get_session,
         env::{gh, ghtoken},
         error::ResponseError,
-        runner::{coding_server_session, new_deployer},
+        runner::coding_server_session,
         time::get_time_i64,
         wallet::get_signer,
     },
@@ -131,6 +132,19 @@ async fn create(
             project = data.project
         )));
     }
+
+    if let Err(_e) = (DatabaseCredits {
+        account: user.to_string(),
+        credits: 0,
+        description: format!("Create project {project}", project = data.project),
+        date: get_time_i64(),
+    })
+    .insert(&database)
+    .await
+    {
+        return HttpResponse::PaymentRequired().finish();
+    }
+
     let project = DatabaseProject {
         name: data.project.clone(),
         owner: user.to_string(),
@@ -298,9 +312,10 @@ async fn change(
         submitted_at: get_time_i64(),
         coding_started_at: None,
         coding_finished_at: None,
+        coding_git_hash: None,
         imagegen_started_at: None,
         imagegen_finished_at: None,
-        git_hash: None,
+        imagegen_git_hash: None,
         deployment_request: None,
     };
     if let Err(e) = deployment.insert(&database).await {
@@ -732,7 +747,7 @@ async fn llm_output(
         return HttpResponse::Unauthorized().finish();
     }
 
-    let server = match DatabaseCodingServer::get_by_assignment(&database, Some(data.deployment))
+    let server = match DatabaseWorkerServer::get_by_assignment(&database, Some(data.deployment))
         .await
     {
         Ok(server) => server,
@@ -746,31 +761,73 @@ async fn llm_output(
     };
 
     let llm_output = match server {
-        Some(server) => match coding_server_session(&new_deployer(), &server).await {
+        Some(server) => match coding_server_session(&server).await {
             Some(session) => {
-                match xnode_manager_sdk::file::read_file(ReadFileInput {
-                    session: &session,
-                    path: ReadFilePath {
-                        scope: "container:miniapp-factory-coder".to_string(),
-                    },
-                    query: ReadFile {
-                        path: format!(
-                            "/var/lib/miniapp-factory-coder/projects/{project}/.aider.chat.history.md",
-                            project = deployment.project
-                        ),
-                    },
-                }).await {
-                    Ok(chat) => {match chat.content {
-                        Output::UTF8 { output } => output,
-                        Output::Bytes { output: _ } => {
-                        log::warn!("Got bytes reading {project} chat from {server}", project = deployment.project, server = server.id);
+                if deployment.coding_finished_at.is_none() {
+                    match xnode_manager_sdk::file::read_file(ReadFileInput {
+                        session: &session,
+                        path: ReadFilePath {
+                            scope: "container:miniapp-factory-coder".to_string(),
+                        },
+                        query: ReadFile {
+                            path: format!(
+                                "/var/lib/miniapp-factory-coder/projects/{project}/.aider.chat.history.md",
+                                project = deployment.project
+                            ),
+                        },
+                    }).await {
+                        Ok(chat) => {match chat.content {
+                            Output::UTF8 { output } => output,
+                            Output::Bytes { output: _ } => {
+                            log::warn!("Got bytes reading {project} chat from {server}", project = deployment.project, server = server.id);
+                                "".to_string()
+                            },
+                        }},
+                        Err(e) => {
+                            log::warn!("Error reading {project} chat from {server}: {e:?}", project = deployment.project, server = server.id);
                             "".to_string()
                         },
-                    }},
-                    Err(e) => {
-                        log::warn!("Error reading {project} chat from {server}: {e:?}", project = deployment.project, server = server.id);
-                        "".to_string()
-                    },
+                    }
+                } else if deployment.imagegen_finished_at.is_none() {
+                    match xnode_manager_sdk::process::logs(LogsInput {
+                        session: &session,
+                        path: LogsPath {
+                            scope: "container:miniapp-factory-imagegen".to_string(),
+                            process: "comfyui.service".to_string(),
+                        },
+                        query: LogQuery {
+                            level: None,
+                            max: None,
+                        },
+                    })
+                    .await
+                    {
+                        Ok(logs) => logs
+                            .into_iter()
+                            .map(|log| match log.message {
+                                Output::UTF8 { output } => output,
+                                Output::Bytes { output: _ } => {
+                                    log::warn!(
+                                        "Got bytes reading {project} logs from {server}",
+                                        project = deployment.project,
+                                        server = server.id
+                                    );
+                                    "".to_string()
+                                }
+                            })
+                            .collect::<Vec<String>>()
+                            .join("\n"),
+                        Err(e) => {
+                            log::warn!(
+                                "Error reading {project} logs from {server}: {e:?}",
+                                project = deployment.project,
+                                server = server.id
+                            );
+                            "".to_string()
+                        }
+                    }
+                } else {
+                    "".to_string()
                 }
             }
             None => "".to_string(),

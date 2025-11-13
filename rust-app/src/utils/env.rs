@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use alloy::primitives::Address;
+
 fn env_var(id: &str) -> Option<String> {
     std::env::var(id)
         .inspect_err(|e| {
@@ -32,6 +34,30 @@ pub fn gh() -> String {
 
 pub fn database() -> String {
     env_var("DATABASE").unwrap_or("postgres:openxai-indexer?host=/run/postgresql".to_string())
+}
+
+pub fn httprpc() -> String {
+    env_var("HTTPRPC").unwrap_or("https://base-rpc.publicnode.com".to_string())
+}
+
+pub fn wsrpc() -> String {
+    env_var("WSRPC").unwrap_or("wss://base-rpc.publicnode.com".to_string())
+}
+
+pub fn deposit() -> Address {
+    Address::parse_checksummed(
+        env_var("DEPOSIT").unwrap_or("0xF0C25895632632047F170Cf4Dda0E41A8BA25789".to_string()),
+        None,
+    )
+    .unwrap_or_else(|e| panic!("Invalid DEPOSIT provided: {e}"))
+}
+
+pub fn openx() -> Address {
+    Address::parse_checksummed(
+        env_var("OPENX").unwrap_or("0xA66B448f97CBf58D12f00711C02bAC2d9EAC6f7f".to_string()),
+        None,
+    )
+    .unwrap_or_else(|e| panic!("Invalid USDC provided: {e}"))
 }
 
 pub fn hyperstackapikey() -> String {

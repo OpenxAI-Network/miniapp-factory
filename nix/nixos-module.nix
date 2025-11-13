@@ -74,6 +74,26 @@ in
         '';
       };
 
+      rpc = {
+        http = lib.mkOption {
+          type = lib.types.str;
+          default = "https://base-rpc.publicnode.com";
+          example = "https://base-sepolia-rpc.publicnode.com";
+          description = ''
+            Blockchain HTTP RPC to query to smart contract calls.
+          '';
+        };
+
+        ws = lib.mkOption {
+          type = lib.types.str;
+          default = "wss://base-rpc.publicnode.com";
+          example = "wss://base-sepolia-rpc.publicnode.com";
+          description = ''
+            Blockchain WebSocket RPC to subscribe to smart contract events.
+          '';
+        };
+      };
+
       postgres = {
         enable = lib.mkOption {
           type = lib.types.bool;
@@ -81,6 +101,26 @@ in
           example = false;
           description = ''
             Enable the default postgres config.
+          '';
+        };
+      };
+
+      contracts = {
+        deposit = lib.mkOption {
+          type = lib.types.str;
+          default = "0xF0C25895632632047F170Cf4Dda0E41A8BA25789";
+          example = "0xF0C25895632632047F170Cf4Dda0E41A8BA25789";
+          description = ''
+            Mini App Factory monetization contract address. 
+          '';
+        };
+
+        openx = lib.mkOption {
+          type = lib.types.str;
+          default = "0xA66B448f97CBf58D12f00711C02bAC2d9EAC6f7f";
+          example = "0xEE5b5633B8fa453bD1a4A24973c742BD0488D1C6";
+          description = ''
+            OPENX contract address. 
           '';
         };
       };
@@ -114,6 +154,10 @@ in
         GH_TOKEN = cfg.github-token;
         GH = "${cfg.gh}/bin/";
         DATABASE = cfg.database;
+        HTTPRPC = cfg.rpc.http;
+        WSRPC = cfg.rpc.ws;
+        DEPOSIT = cfg.contracts.deposit;
+        OPENX = cfg.contracts.openx;
         HYPERSTACKAPIKEY = cfg.hyperstackapikey;
       };
       serviceConfig = {
