@@ -400,6 +400,23 @@ pub async fn finish_deployment(database: Database) {
                     );
                 };
 
+                // Clear RAM
+                if let Err(e) = xnode_manager_sdk::process::execute(ExecuteInput {
+                    session: &session,
+                    path: ExecutePath {
+                        process: "ollama.service".to_string(),
+                        scope: "container:miniapp-factory-coder".to_string(),
+                    },
+                    data: ProcessCommand::Restart,
+                })
+                .await
+                {
+                    log::error!(
+                        "Could not restart coder process ollama on server {server}: {e:?}",
+                        server = server.id
+                    );
+                }
+
                 imagegen_assignment(&database, &mut deployment, &mut server).await;
             }
 
@@ -492,6 +509,23 @@ pub async fn finish_deployment(database: Database) {
                         id = deployment.id
                     );
                 };
+
+                // Clear RAM
+                if let Err(e) = xnode_manager_sdk::process::execute(ExecuteInput {
+                    session: &session,
+                    path: ExecutePath {
+                        process: "comfyui.service".to_string(),
+                        scope: "container:miniapp-factory-imagegen".to_string(),
+                    },
+                    data: ProcessCommand::Restart,
+                })
+                .await
+                {
+                    log::error!(
+                        "Could not restart imagegen process comfyui on server {server}: {e:?}",
+                        server = server.id
+                    );
+                }
 
                 if let Err(e) = server.update_assignment(&database, None).await {
                     log::error!(
