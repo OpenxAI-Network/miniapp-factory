@@ -778,9 +778,8 @@ async fn llm_output(
                     }).await {
                         Ok(chat) => {match chat.content {
                             Output::UTF8 { output } => output,
-                            Output::Bytes { output: _ } => {
-                            log::warn!("Got bytes reading {project} chat from {server}", project = deployment.project, server = server.id);
-                                "".to_string()
+                            Output::Bytes { output } => {
+                                    String::from_utf8_lossy(&output).to_string()
                             },
                         }},
                         Err(e) => {
@@ -806,13 +805,8 @@ async fn llm_output(
                             .into_iter()
                             .map(|log| match log.message {
                                 Output::UTF8 { output } => output,
-                                Output::Bytes { output: _ } => {
-                                    log::warn!(
-                                        "Got bytes reading {project} logs from {server}",
-                                        project = deployment.project,
-                                        server = server.id
-                                    );
-                                    "".to_string()
+                                Output::Bytes { output } => {
+                                    String::from_utf8_lossy(&output).to_string()
                                 }
                             })
                             .collect::<Vec<String>>()
