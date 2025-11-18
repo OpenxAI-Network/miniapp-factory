@@ -247,17 +247,6 @@ pub async fn execute_pending_deployments(database: Database) {
                 }
             };
 
-            if let Err(e) = server
-                .update_assignment(&database, Some(deployment.id))
-                .await
-            {
-                log::error!(
-                    "Could not set coding server {server} assignment to deployment {deployment}: {e}",
-                    server = server.id,
-                    deployment = deployment.id
-                );
-            }
-
             coding_assignment(&database, &mut deployment, &mut server).await;
         }
     }
@@ -669,23 +658,6 @@ async fn coding_assignment(
     deployment: &mut DatabaseDeployment,
     server: &mut DatabaseWorkerServer,
 ) {
-    let coding_started_at = get_time_i64();
-    if let Err(e) = deployment
-        .update_coding_started_at(database, Some(coding_started_at))
-        .await
-    {
-        log::error!(
-            "Could not set coding started at to {coding_started_at} for deployment {id}: {e}",
-            id = deployment.id
-        );
-    };
-    log::info!(
-        "Started processing deployment {id} (project {project}) coding at {coding_started_at} on server {server}",
-        id = deployment.id,
-        project = deployment.project,
-        server = server.id
-    );
-
     let project = match DatabaseProject::get_by_name(database, &deployment.project).await {
         Ok(project) => match project {
             Some(project) => project,
@@ -856,6 +828,35 @@ async fn coding_assignment(
             server = server.id
         );
     }
+
+
+    if let Err(e) = server
+        .update_assignment(&database, Some(deployment.id))
+        .await
+    {
+        log::error!(
+            "Could not set coding server {server} assignment to deployment {deployment}: {e}",
+            server = server.id,
+            deployment = deployment.id
+        );
+    }
+
+    let coding_started_at = get_time_i64();
+    if let Err(e) = deployment
+        .update_coding_started_at(database, Some(coding_started_at))
+        .await
+    {
+        log::error!(
+            "Could not set coding started at to {coding_started_at} for deployment {id}: {e}",
+            id = deployment.id
+        );
+    };
+    log::info!(
+        "Started processing deployment {id} (project {project}) coding at {coding_started_at} on server {server}",
+        id = deployment.id,
+        project = deployment.project,
+        server = server.id
+    );
 }
 
 async fn imagegen_assignment(
@@ -863,21 +864,6 @@ async fn imagegen_assignment(
     deployment: &mut DatabaseDeployment,
     server: &mut DatabaseWorkerServer,
 ) {
-    let imagegen_started_at = get_time_i64();
-    if let Err(e) = deployment
-        .update_imagegen_started_at(database, Some(imagegen_started_at))
-        .await
-    {
-        log::error!(
-            "Could not set imagegen started at to {imagegen_started_at} for deployment {id}: {e}",
-            id = deployment.id
-        );
-    };
-    log::info!(
-        "Started processing deployment {id} imagegen at {imagegen_started_at}",
-        id = deployment.id
-    );
-
     let assignment = ImagegenAssignment {
         project: deployment.project.clone(),
     };
@@ -1025,6 +1011,22 @@ async fn imagegen_assignment(
             server = server.id
         );
     }
+
+
+    let imagegen_started_at = get_time_i64();
+    if let Err(e) = deployment
+        .update_imagegen_started_at(database, Some(imagegen_started_at))
+        .await
+    {
+        log::error!(
+            "Could not set imagegen started at to {imagegen_started_at} for deployment {id}: {e}",
+            id = deployment.id
+        );
+    };
+    log::info!(
+        "Started processing deployment {id} imagegen at {imagegen_started_at}",
+        id = deployment.id
+    );
 }
 
 async fn deploy_server(database: &Database, xnode_owner: String) {
