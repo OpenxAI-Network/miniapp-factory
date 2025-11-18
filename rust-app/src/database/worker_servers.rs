@@ -82,7 +82,7 @@ impl DatabaseWorkerServer {
     }
 
     pub async fn insert(&mut self, database: &Database) -> Result<(), Error> {
-        let id: i32 = query_scalar("INSERT INTO worker_servers(hardware, coder_deployment, imagegen_deployment, setup_finished, assignment, dynamic) VALUES ($1, $2, $3, $4, $5) RETURNING id")
+        let id: i32 = query_scalar("INSERT INTO worker_servers(hardware, coder_deployment, imagegen_deployment, setup_finished, assignment, dynamic) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id")
             .bind(&self.hardware)
             .bind(self.coder_deployment)
             .bind(self.imagegen_deployment)

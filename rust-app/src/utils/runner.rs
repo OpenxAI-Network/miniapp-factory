@@ -247,8 +247,6 @@ pub async fn execute_pending_deployments(database: Database) {
                 }
             };
 
-            coding_assignment(&database, &mut deployment, &mut server).await;
-
             if let Err(e) = server
                 .update_assignment(&database, Some(deployment.id))
                 .await
@@ -259,6 +257,8 @@ pub async fn execute_pending_deployments(database: Database) {
                     deployment = deployment.id
                 );
             }
+
+            coding_assignment(&database, &mut deployment, &mut server).await;
         }
     }
 }
