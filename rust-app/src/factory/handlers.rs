@@ -192,7 +192,7 @@ async fn project_create(
         .arg("OpenxAI-Network/miniapp-factory-template");
     if let Err(e) = cli_command.output() {
         log::error!(
-            "Could create github project {project}: {e}",
+            "Could not create github project {project}: {e}",
             project = data.project
         );
         return HttpResponse::InternalServerError().finish();
@@ -219,7 +219,7 @@ async fn project_create(
                             nvidia_gpus: None,
                         }
                     },
-                    update_inputs: Some(vec![]),
+                    update_inputs: None,
                 },
             })
             .await
