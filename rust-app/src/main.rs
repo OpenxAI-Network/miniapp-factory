@@ -16,6 +16,7 @@ use crate::{
 mod blockchain;
 mod database;
 mod factory;
+mod showcase;
 mod utils;
 mod waitlist;
 
@@ -52,6 +53,7 @@ async fn main() {
                     .app_data(web::Data::new(DynProvider::new(provider.clone())))
                     .service(web::scope("/api/factory").configure(factory::configure))
                     .service(web::scope("/api/waitlist").configure(waitlist::configure))
+                    .service(web::scope("/api/showcase").configure(showcase::configure))
             })
             .bind(format!(
                 "{hostname}:{port}",

@@ -47,6 +47,18 @@ impl DatabaseDeployment {
         .await
     }
 
+    pub async fn get_all_by_project_unfinished(
+        database: &Database,
+        project: &str,
+    ) -> Result<Vec<Self>, Error> {
+        query_as(
+            "SELECT id, project, instructions, submitted_at, coding_started_at, coding_finished_at, coding_git_hash, imagegen_started_at, imagegen_finished_at, imagegen_git_hash, deployment_request FROM deployments WHERE coding_started_at IS NULL AND project = $1",
+        )
+        .bind(project)
+        .fetch_all(&database.connection)
+        .await
+    }
+
     pub async fn get_next_unfinished(database: &Database) -> Result<Option<Self>, Error> {
         query_as(
             "SELECT id, project, instructions, submitted_at, coding_started_at, coding_finished_at, coding_git_hash, imagegen_started_at, imagegen_finished_at, imagegen_git_hash, deployment_request FROM deployments WHERE coding_started_at IS NULL ORDER BY id ASC LIMIT 1",
@@ -59,6 +71,15 @@ impl DatabaseDeployment {
         query_scalar("SELECT COUNT(id) FROM deployments WHERE coding_started_at IS NULL")
             .fetch_one(&database.connection)
             .await
+    }
+
+    pub async fn get_queued_count_before(database: &Database, before: i32) -> Result<i64, Error> {
+        query_scalar(
+            "SELECT COUNT(id) FROM deployments WHERE coding_started_at IS NULL AND id < $1",
+        )
+        .bind(before)
+        .fetch_one(&database.connection)
+        .await
     }
 
     pub async fn get_by_id(database: &Database, id: i32) -> Result<Option<Self>, Error> {

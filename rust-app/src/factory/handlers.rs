@@ -15,7 +15,8 @@ use crate::{
         projects::DatabaseProject, worker_servers::DatabaseWorkerServer,
     },
     factory::models::{
-        AccountAssociation, Available, BaseBuild, Change, Create, History, LLMOutput, User, Version,
+        AccountAssociation, Available, BaseBuild, Change, Create, History, LLMOutput, Queue,
+        Version,
     },
     utils::{
         auth::get_session,
@@ -33,8 +34,8 @@ async fn owner() -> impl Responder {
     HttpResponse::Ok().json(format!("eth:{addr}"))
 }
 
-#[get("/user/info")]
-async fn info(database: web::Data<Database>, req: HttpRequest) -> impl Responder {
+#[get("/user/projects")]
+async fn user_projects(database: web::Data<Database>, req: HttpRequest) -> impl Responder {
     let user = match req
         .headers()
         .get("xnode-auth-user")
@@ -46,22 +47,44 @@ async fn info(database: web::Data<Database>, req: HttpRequest) -> impl Responder
         }
     };
 
-    let projects = match DatabaseProject::get_all_by_owner(&database, user).await {
-        Ok(projects) => projects.into_iter().map(|project| project.name).collect(),
+    match DatabaseProject::get_all_by_owner(&database, user).await {
+        Ok(projects) => HttpResponse::Ok().json(
+            projects
+                .into_iter()
+                .map(|project| project.name)
+                .collect::<Vec<String>>(),
+        ),
         Err(e) => {
             log::error!("Could not get projects of {user}: {e}");
-            return HttpResponse::InternalServerError().finish();
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+#[get("/user/credits")]
+async fn user_credits(database: web::Data<Database>, req: HttpRequest) -> impl Responder {
+    let user = match req
+        .headers()
+        .get("xnode-auth-user")
+        .and_then(|header| header.to_str().ok())
+    {
+        Some(header) => header,
+        _ => {
+            return HttpResponse::Unauthorized().finish();
         }
     };
 
-    HttpResponse::Ok().json(User {
-        id: user.to_string(),
-        projects,
-    })
+    match DatabaseCredits::get_total_credits_by_account(&database, user).await {
+        Ok(credits) => HttpResponse::Ok().json(credits.unwrap_or_default()),
+        Err(e) => {
+            log::error!("Could not get total credits of {user}: {e}");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }
 
 #[get("/project/available")]
-async fn available(
+async fn project_available(
     database: web::Data<Database>,
     data: web::Query<Available>,
     req: HttpRequest,
@@ -100,7 +123,7 @@ async fn available(
 }
 
 #[post("/project/create")]
-async fn create(
+async fn project_create(
     database: web::Data<Database>,
     data: web::Json<Create>,
     req: HttpRequest,
@@ -145,7 +168,8 @@ async fn create(
         return HttpResponse::PaymentRequired().finish();
     }
 
-    let project = DatabaseProject {
+    let mut project = DatabaseProject {
+        id: 0,
         name: data.project.clone(),
         owner: user.to_string(),
         account_association: None,
@@ -260,7 +284,7 @@ async fn create(
 }
 
 #[post("/project/change")]
-async fn change(
+async fn project_change(
     database: web::Data<Database>,
     data: web::Json<Change>,
     req: HttpRequest,
@@ -305,6 +329,28 @@ async fn change(
         return HttpResponse::Unauthorized().finish();
     }
 
+    let unfinished = match DatabaseDeployment::get_all_by_project_unfinished(
+        &database,
+        &data.project,
+    )
+    .await
+    {
+        Ok(deployments) => deployments,
+        Err(e) => {
+            log::error!(
+                "Could not get unfinished deployments for project {project} from the database: {e}",
+                project = data.project
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+    if let Some(deployment) = unfinished.first() {
+        return HttpResponse::TooManyRequests().json(ResponseError::new(format!(
+            "Deployment {deployment} wasn't completed yet.",
+            deployment = deployment.id
+        )));
+    }
+
     let mut deployment = DatabaseDeployment {
         id: 0,
         project: data.project.clone(),
@@ -327,7 +373,7 @@ async fn change(
 }
 
 #[get("/project/history")]
-async fn history(
+async fn project_history(
     database: web::Data<Database>,
     data: web::Query<History>,
     req: HttpRequest,
@@ -387,7 +433,7 @@ async fn history(
 }
 
 #[post("/project/version")]
-async fn version(
+async fn project_version(
     database: web::Data<Database>,
     data: web::Json<Version>,
     req: HttpRequest,
@@ -489,7 +535,7 @@ async fn version(
 }
 
 #[post("/project/account_association")]
-async fn account_association(
+async fn project_account_association(
     database: web::Data<Database>,
     data: web::Json<AccountAssociation>,
     req: HttpRequest,
@@ -591,7 +637,7 @@ async fn account_association(
 }
 
 #[post("/project/base_build")]
-async fn base_build(
+async fn project_base_build(
     database: web::Data<Database>,
     data: web::Json<BaseBuild>,
     req: HttpRequest,
@@ -692,8 +738,8 @@ async fn base_build(
     HttpResponse::Ok().json(deployment_request)
 }
 
-#[get("/project/llm_output")]
-async fn llm_output(
+#[get("/deployment/llm_output")]
+async fn deployment_llm_output(
     database: web::Data<Database>,
     data: web::Query<LLMOutput>,
     req: HttpRequest,
@@ -830,6 +876,73 @@ async fn llm_output(
     };
 
     HttpResponse::Ok().json(llm_output)
+}
+
+#[get("/deployment/queue")]
+async fn deployment_queue(
+    database: web::Data<Database>,
+    data: web::Query<Queue>,
+    req: HttpRequest,
+) -> impl Responder {
+    let user = match req
+        .headers()
+        .get("xnode-auth-user")
+        .and_then(|header| header.to_str().ok())
+    {
+        Some(header) => header,
+        _ => {
+            return HttpResponse::Unauthorized().finish();
+        }
+    };
+
+    let deployment = match DatabaseDeployment::get_by_id(&database, data.deployment).await {
+        Ok(deployment) => match deployment {
+            Some(deployment) => deployment,
+            None => {
+                return HttpResponse::NotFound().finish();
+            }
+        },
+        Err(e) => {
+            log::error!(
+                "Could not get deployment {deployment} from the database: {e}",
+                deployment = data.deployment
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    let project = match DatabaseProject::get_by_name(&database, &deployment.project).await {
+        Ok(project) => match project {
+            Some(project) => project,
+            None => {
+                return HttpResponse::BadRequest().json(ResponseError::new(format!(
+                    "{project} does not exist.",
+                    project = deployment.project
+                )));
+            }
+        },
+        Err(e) => {
+            log::error!(
+                "Could not get project {project} from the database: {e}",
+                project = deployment.project
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+    if project.owner != user {
+        return HttpResponse::Unauthorized().finish();
+    }
+
+    match DatabaseDeployment::get_queued_count_before(&database, data.deployment).await {
+        Ok(count) => HttpResponse::Ok().json(count),
+        Err(e) => {
+            log::error!(
+                "Could not get queued count before {deployment} from the database: {e}",
+                deployment = data.deployment
+            );
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }
 
 fn valid_project(project: &str) -> bool {

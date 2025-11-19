@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
-use sqlx::{Error, FromRow, query, query_as, types::Json};
+use sqlx::{Error, FromRow, query, query_as, query_scalar, types::Json};
 
 use crate::database::{Database, DatabaseConnection};
 
 pub async fn create_table(connection: &DatabaseConnection) {
     sqlx::raw_sql(
-        "CREATE TABLE IF NOT EXISTS projects(name TEXT PRIMARY KEY NOT NULL, owner TEXT NOT NULL, account_association JSON, base_build JSON, version TEXT)",
+        "CREATE TABLE IF NOT EXISTS projects(id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL, owner TEXT NOT NULL, account_association JSON, base_build JSON, version TEXT)",
     )
     .execute(connection)
     .await
@@ -26,6 +26,7 @@ pub struct BaseBuild {
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]
 pub struct DatabaseProject {
+    pub id: i32,
     pub name: String,
     pub owner: String,
     pub account_association: Option<Json<AccountAssociation>>,
@@ -34,16 +35,21 @@ pub struct DatabaseProject {
 }
 
 impl DatabaseProject {
-    #[allow(dead_code)]
     pub async fn get_all(database: &Database) -> Result<Vec<Self>, Error> {
-        query_as("SELECT name, owner, account_association, base_build, version FROM projects")
+        query_as("SELECT id, name, owner, account_association, base_build, version FROM projects")
             .fetch_all(&database.connection)
+            .await
+    }
+
+    pub async fn get_count(database: &Database) -> Result<i64, Error> {
+        query_scalar("SELECT COUNT(id) FROM projects")
+            .fetch_one(&database.connection)
             .await
     }
 
     pub async fn get_all_by_owner(database: &Database, owner: &str) -> Result<Vec<Self>, Error> {
         query_as(
-            "SELECT name, owner, account_association, base_build, version FROM projects WHERE owner = $1",
+            "SELECT id, name, owner, account_association, base_build, version FROM projects WHERE owner = $1",
         )
         .bind(owner)
         .fetch_all(&database.connection)
@@ -52,30 +58,24 @@ impl DatabaseProject {
 
     pub async fn get_by_name(database: &Database, name: &str) -> Result<Option<Self>, Error> {
         query_as(
-            "SELECT name, owner, account_association, base_build, version FROM projects WHERE name = $1",
+            "SELECT id, name, owner, account_association, base_build, version FROM projects WHERE name = $1",
         )
         .bind(name)
         .fetch_optional(&database.connection)
         .await
     }
 
-    pub async fn insert(&self, database: &Database) -> Result<(), Error> {
-        let Self {
-            name,
-            owner,
-            account_association,
-            base_build,
-            version,
-        } = self;
-
-        query("INSERT INTO projects(name, owner, account_association, base_build, version) VALUES ($1, $2, $3, $4, $5);")
-            .bind(name)
-            .bind(owner)
-            .bind(account_association)
-            .bind(base_build)
-            .bind(version)
-            .execute(&database.connection)
+    pub async fn insert(&mut self, database: &Database) -> Result<(), Error> {
+        let id: i32 = query_scalar("INSERT INTO projects(name, owner, account_association, base_build, version) VALUES ($1, $2, $3, $4, $5) RETURNING id")
+            .bind(&self.name)
+            .bind(&self.owner)
+            .bind(&self.account_association)
+            .bind(&self.base_build)
+            .bind(&self.version)
+            .fetch_one(&database.connection)
             .await?;
+
+        self.id = id;
 
         Ok(())
     }
@@ -86,9 +86,9 @@ impl DatabaseProject {
         account_association: AccountAssociation,
     ) -> Result<(), Error> {
         let account_association = Json::from(account_association);
-        query("UPDATE projects SET account_association = $1 WHERE name = $2;")
+        query("UPDATE projects SET account_association = $1 WHERE id = $2;")
             .bind(&account_association)
-            .bind(&self.name)
+            .bind(self.id)
             .execute(&database.connection)
             .await?;
 
@@ -103,9 +103,9 @@ impl DatabaseProject {
         base_build: BaseBuild,
     ) -> Result<(), Error> {
         let base_build = Json::from(base_build);
-        query("UPDATE projects SET base_build = $1 WHERE name = $2;")
+        query("UPDATE projects SET base_build = $1 WHERE id = $2;")
             .bind(&base_build)
-            .bind(&self.name)
+            .bind(self.id)
             .execute(&database.connection)
             .await?;
 
@@ -119,9 +119,9 @@ impl DatabaseProject {
         database: &Database,
         version: Option<String>,
     ) -> Result<(), Error> {
-        query("UPDATE projects SET version = $1 WHERE name = $2;")
+        query("UPDATE projects SET version = $1 WHERE id = $2;")
             .bind(&version)
-            .bind(&self.name)
+            .bind(self.id)
             .execute(&database.connection)
             .await?;
 

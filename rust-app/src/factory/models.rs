@@ -3,12 +3,6 @@ use serde::{Deserialize, Serialize};
 use crate::database::projects;
 
 #[derive(Serialize, Deserialize)]
-pub struct User {
-    pub id: String,
-    pub projects: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct Available {
     pub project: String,
 }
@@ -49,5 +43,10 @@ pub struct BaseBuild {
 
 #[derive(Serialize, Deserialize)]
 pub struct LLMOutput {
+    pub deployment: i32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Queue {
     pub deployment: i32,
 }
