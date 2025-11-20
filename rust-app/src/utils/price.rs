@@ -11,5 +11,5 @@ pub async fn get_price(database: &Database, user: &str) -> i64 {
         }
     }
 
-    50_000_000
+    20_000_000
 }
