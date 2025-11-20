@@ -22,6 +22,7 @@ use crate::{
         auth::get_session,
         env::{gh, ghtoken},
         error::ResponseError,
+        price::get_price,
         runner::coding_server_session,
         time::get_time_i64,
         wallet::get_signer,
@@ -122,6 +123,22 @@ async fn project_available(
     }
 }
 
+#[get("/project/price")]
+async fn project_price(database: web::Data<Database>, req: HttpRequest) -> impl Responder {
+    let user = match req
+        .headers()
+        .get("xnode-auth-user")
+        .and_then(|header| header.to_str().ok())
+    {
+        Some(header) => header,
+        _ => {
+            return HttpResponse::Unauthorized().finish();
+        }
+    };
+
+    HttpResponse::Ok().json(get_price(&database, user).await)
+}
+
 #[post("/project/create")]
 async fn project_create(
     database: web::Data<Database>,
@@ -156,9 +173,10 @@ async fn project_create(
         )));
     }
 
+    let price = get_price(&database, user).await;
     if let Err(_e) = (DatabaseCredits {
         account: user.to_string(),
-        credits: 0,
+        credits: -price,
         description: format!("Create project {project}", project = data.project),
         date: get_time_i64(),
     })

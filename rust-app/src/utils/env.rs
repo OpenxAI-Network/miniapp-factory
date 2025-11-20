@@ -46,7 +46,7 @@ pub fn wsrpc() -> String {
 
 pub fn deposit() -> Address {
     Address::parse_checksummed(
-        env_var("DEPOSIT").unwrap_or("0xF0C25895632632047F170Cf4Dda0E41A8BA25789".to_string()),
+        env_var("DEPOSIT").unwrap_or("0xC96d00a5e1d03b719ADD5A855ba84d05561D9897".to_string()),
         None,
     )
     .unwrap_or_else(|e| panic!("Invalid DEPOSIT provided: {e}"))

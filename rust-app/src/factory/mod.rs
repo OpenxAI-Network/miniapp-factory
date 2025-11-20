@@ -8,6 +8,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(handlers::user_projects);
     cfg.service(handlers::user_credits);
     cfg.service(handlers::project_available);
+    cfg.service(handlers::project_price);
     cfg.service(handlers::project_create);
     cfg.service(handlers::project_change);
     cfg.service(handlers::project_history);

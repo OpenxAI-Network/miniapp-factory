@@ -108,8 +108,8 @@ in
       contracts = {
         deposit = lib.mkOption {
           type = lib.types.str;
-          default = "0xF0C25895632632047F170Cf4Dda0E41A8BA25789";
-          example = "0xF0C25895632632047F170Cf4Dda0E41A8BA25789";
+          default = "0xC96d00a5e1d03b719ADD5A855ba84d05561D9897";
+          example = "0x519ce4C129a981B2CBB4C3990B1391dA24E8EbF3";
           description = ''
             Mini App Factory monetization contract address. 
           '';
