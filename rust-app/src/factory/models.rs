@@ -50,3 +50,21 @@ pub struct LLMOutput {
 pub struct Queue {
     pub deployment: i32,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct PromoCodeRedeem {
+    pub code: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PromoCode {
+    pub code: String,
+    pub credits: i64,
+    pub description: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PromoCodessAddition {
+    pub promo_codes: String,
+    pub signature: String,
+}

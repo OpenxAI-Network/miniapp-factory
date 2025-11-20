@@ -12,11 +12,12 @@ use xnode_manager_sdk::{
 use crate::{
     database::{
         Database, credits::DatabaseCredits, deployments::DatabaseDeployment,
-        projects::DatabaseProject, worker_servers::DatabaseWorkerServer,
+        projects::DatabaseProject, promo_code::DatabasePromoCode,
+        worker_servers::DatabaseWorkerServer,
     },
     factory::models::{
-        AccountAssociation, Available, BaseBuild, Change, Create, History, LLMOutput, Queue,
-        Version,
+        AccountAssociation, Available, BaseBuild, Change, Create, History, LLMOutput, PromoCode,
+        PromoCodeRedeem, PromoCodessAddition, Queue, Version,
     },
     utils::{
         auth::get_session,
@@ -961,6 +962,100 @@ async fn deployment_queue(
             HttpResponse::InternalServerError().finish()
         }
     }
+}
+
+#[post("/promo_code/redeem")]
+async fn code_redeem(
+    database: web::Data<Database>,
+    data: web::Json<PromoCodeRedeem>,
+    req: HttpRequest,
+) -> impl Responder {
+    let user = match req
+        .headers()
+        .get("xnode-auth-user")
+        .and_then(|header| header.to_str().ok())
+    {
+        Some(header) => header,
+        _ => {
+            return HttpResponse::Unauthorized().finish();
+        }
+    };
+
+    let mut code = match DatabasePromoCode::get_unredeemed_by_code(&database, &data.code).await {
+        Ok(code) => match code {
+            Some(code) => code,
+            None => {
+                return HttpResponse::BadRequest().finish();
+            }
+        },
+        Err(_e) => {
+            return HttpResponse::BadRequest().finish();
+        }
+    };
+    if let Err(e) = code.redeem(&database, user).await {
+        log::error!(
+            "COULD NOT REDEEM PROMO CODE {code:?} FOR {account}: {e}",
+            account = user
+        );
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    let credits: DatabaseCredits = match (&code).try_into() {
+        Ok(credits) => credits,
+        Err(e) => {
+            log::error!("COULD NOT CONVERT PROMO CODE {code:?} INTO CREDITS: {e:?}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+    if let Err(e) = credits.insert(&database).await {
+        log::error!("COULD NOT INSERT CREDITS {credits:?}: {e}");
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    HttpResponse::Ok().finish()
+}
+
+#[post("/promo_code/add")]
+async fn code_add(
+    database: web::Data<Database>,
+    data: web::Json<PromoCodessAddition>,
+    req: HttpRequest,
+) -> impl Responder {
+    let user = match req
+        .headers()
+        .get("xnode-auth-user")
+        .and_then(|header| header.to_str().ok())
+    {
+        Some(header) => header,
+        _ => {
+            return HttpResponse::Unauthorized().finish();
+        }
+    };
+
+    if user != "eth:519ce4c129a981b2cbb4c3990b1391da24e8ebf3" {
+        return HttpResponse::Unauthorized().finish();
+    }
+
+    let promo_codes: Vec<PromoCode> = match serde_json::from_str(&data.promo_codes) {
+        Ok(promo_codes) => promo_codes,
+        Err(_e) => {
+            return HttpResponse::BadRequest().finish();
+        }
+    };
+
+    for code in &promo_codes {
+        let code = DatabasePromoCode {
+            code: code.code.clone(),
+            credits: code.credits,
+            description: code.description.clone(),
+            redeemed_by: None,
+        };
+        if let Err(e) = code.insert(&database).await {
+            log::error!("COULD NOT INSERT PROMO CODE {code:?}: {e}");
+        }
+    }
+
+    HttpResponse::Ok().finish()
 }
 
 fn valid_project(project: &str) -> bool {

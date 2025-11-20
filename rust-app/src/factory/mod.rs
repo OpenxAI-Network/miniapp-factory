@@ -16,4 +16,6 @@ pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(handlers::project_base_build);
     cfg.service(handlers::deployment_llm_output);
     cfg.service(handlers::deployment_queue);
+    cfg.service(handlers::code_redeem);
+    cfg.service(handlers::code_add);
 }

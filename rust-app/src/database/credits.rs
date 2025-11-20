@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{Error, FromRow, query, query_as, query_scalar};
 
-use crate::database::{Database, DatabaseConnection};
+use crate::{
+    database::{Database, DatabaseConnection, promo_code::DatabasePromoCode},
+    utils::time::get_time_i64,
+};
 
 pub async fn create_table(connection: &DatabaseConnection) {
     sqlx::raw_sql(
@@ -99,5 +102,26 @@ impl DatabaseCredits {
             .await?;
 
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum PromoCodeToCreditsConversionError {
+    UnclaimedPromoCode,
+}
+impl TryFrom<&DatabasePromoCode> for DatabaseCredits {
+    type Error = PromoCodeToCreditsConversionError;
+
+    fn try_from(value: &DatabasePromoCode) -> Result<Self, Self::Error> {
+        if let Some(account) = value.redeemed_by.clone() {
+            Ok(DatabaseCredits {
+                account,
+                credits: value.credits,
+                description: format!("Redeem of promo code {code}", code = value.code),
+                date: get_time_i64(),
+            })
+        } else {
+            Err(PromoCodeToCreditsConversionError::UnclaimedPromoCode)
+        }
     }
 }
