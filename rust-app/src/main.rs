@@ -6,10 +6,11 @@ use tokio::{spawn, try_join};
 
 use crate::{
     blockchain::start_event_listeners,
-    database::Database,
+    database::{Database, credits::DatabaseCredits, waitlist::DatabaseWaitlist},
     utils::{
         env::{datadir, hostname, httprpc, port},
         runner::{execute_pending_deployments, finish_deployment, manage_coding_servers},
+        time::get_time_i64,
     },
 };
 
@@ -40,6 +41,25 @@ async fn main() {
         .connect(&httprpc())
         .await
         .unwrap_or_else(|e| panic!("Could not connect to HTTP rpc provider: {e}"));
+
+    // let waitlist = match DatabaseWaitlist::get_all(&database).await {
+    //     Ok(waitlist) => waitlist,
+    //     Err(e) => {
+    //         panic!("Could not get waitlist to distribute initial credits: {e}");
+    //     }
+    // };
+    // for (position, waitlist) in waitlist.iter().enumerate() {
+    //     let credits = 0;
+    //     let credit = DatabaseCredits {
+    //         account: waitlist.account.clone(),
+    //         credits,
+    //         date: get_time_i64(),
+    //         description: format!("Waitlist position {position}"),
+    //     };
+    //     if let Err(e) = credit.insert(&database).await {
+    //         panic!("Could not get waitlist credit {credit:?}: {e}");
+    //     }
+    // }
 
     if let Err(e) = try_join!(
         spawn(start_event_listeners(database.clone())),

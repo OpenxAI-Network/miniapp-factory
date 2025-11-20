@@ -1,4 +1,4 @@
-use alloy::{providers::Provider, sol};
+use alloy::{primitives::U256, providers::Provider, sol};
 use futures_util::StreamExt;
 
 use crate::{
@@ -38,8 +38,8 @@ pub async fn event_listeners<P: Provider>(provider: P, database: Database) {
                     return;
                 }
 
-                let account = event.from.to_string();
-                let amount: i64 = match event.value.try_into() {
+                let account = event.from.to_string().to_ascii_lowercase().replace("0x", "eth:");
+                let amount: i64 = match (event.value.div_ceil(U256::from_str_radix("1000000000000", 10).expect("Invalid 10^12"))).try_into() {
                     Ok(amount) => amount,
                     Err(e) => {
                         log::error!("Amount {value} could not be converted into i64: {e}", value = event.value);
