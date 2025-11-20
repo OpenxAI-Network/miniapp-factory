@@ -224,32 +224,6 @@ async fn project_create(
     .await
     {
         Ok(session) => {
-            // deploy project container
-            if let Err(e) = xnode_manager_sdk::config::set(xnode_manager_sdk::config::SetInput {
-                session: &session,
-                path: xnode_manager_sdk::config::SetPath {
-                    container: data.project.clone(),
-                },
-                data: xnode_manager_sdk::config::ContainerChange {
-                    settings: {
-                        xnode_manager_sdk::config::ContainerSettings {
-                            flake: project.get_flake(),
-                            network: Some("containernet".to_string()),
-                            nvidia_gpus: None,
-                        }
-                    },
-                    update_inputs: None,
-                },
-            })
-            .await
-            {
-                log::error!(
-                    "Could not update mini app host project {project}: {e:?}",
-                    project = data.project
-                );
-                return HttpResponse::InternalServerError().finish();
-            }
-
             // update os expose file with all projects to expose
             let projects: Vec<String> = match DatabaseProject::get_all(&database).await {
                 Ok(projects) => projects.into_iter().map(|project| project.name).collect(),
@@ -291,6 +265,32 @@ async fn project_create(
                 .await
             {
                 log::error!("Could not update mini app host os: {e:?}");
+                return HttpResponse::InternalServerError().finish();
+            }
+
+            // deploy project container
+            if let Err(e) = xnode_manager_sdk::config::set(xnode_manager_sdk::config::SetInput {
+                session: &session,
+                path: xnode_manager_sdk::config::SetPath {
+                    container: data.project.clone(),
+                },
+                data: xnode_manager_sdk::config::ContainerChange {
+                    settings: {
+                        xnode_manager_sdk::config::ContainerSettings {
+                            flake: project.get_flake(),
+                            network: Some("containernet".to_string()),
+                            nvidia_gpus: None,
+                        }
+                    },
+                    update_inputs: None,
+                },
+            })
+            .await
+            {
+                log::error!(
+                    "Could not update mini app host project {project}: {e:?}",
+                    project = data.project
+                );
                 return HttpResponse::InternalServerError().finish();
             }
         }
