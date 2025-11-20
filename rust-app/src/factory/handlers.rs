@@ -1,8 +1,9 @@
-use std::process::Command;
+use std::{process::Command, time::Duration};
 
 use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use hex::ToHex;
 use regex::Regex;
+use tokio::time::sleep;
 use xnode_manager_sdk::{
     file::{ReadFile, ReadFileInput, ReadFilePath},
     process::{LogQuery, LogsInput, LogsPath},
@@ -267,6 +268,8 @@ async fn project_create(
                 log::error!("Could not update mini app host os: {e:?}");
                 return HttpResponse::InternalServerError().finish();
             }
+
+            sleep(Duration::from_secs(1)).await;
 
             // deploy project container
             if let Err(e) = xnode_manager_sdk::config::set(xnode_manager_sdk::config::SetInput {
