@@ -161,7 +161,8 @@ impl DatabaseProject {
             .version
             .as_ref()
             .map(|version| format!("/{version}"))
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .replace("\n", "");
         format!(
             "\
 {{
