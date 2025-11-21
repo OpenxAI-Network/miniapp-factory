@@ -18,7 +18,7 @@ use crate::{
     },
     factory::models::{
         AccountAssociation, Available, BaseBuild, Change, Create, History, LLMOutput, PromoCode,
-        PromoCodeRedeem, PromoCodessAddition, Queue, Version,
+        PromoCodeRedeem, PromoCodessAddition, Queue, Reset,
     },
     utils::{
         auth::get_session,
@@ -385,6 +385,7 @@ async fn project_change(
         imagegen_finished_at: None,
         imagegen_git_hash: None,
         deployment_request: None,
+        deleted: false,
     };
     if let Err(e) = deployment.insert(&database).await {
         log::error!("Could not insert deployment {deployment:?} into database: {e}");
@@ -440,24 +441,25 @@ async fn project_history(
         return HttpResponse::Unauthorized().finish();
     }
 
-    let history = match DatabaseDeployment::get_all_by_project(&database, &project.name).await {
-        Ok(history) => history,
-        Err(e) => {
-            log::error!(
-                "Could not get project deployment for {project} from the database: {e}",
-                project = data.project
-            );
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
+    let history =
+        match DatabaseDeployment::get_all_by_project_undeleted(&database, &project.name).await {
+            Ok(history) => history,
+            Err(e) => {
+                log::error!(
+                    "Could not get project deployment for {project} from the database: {e}",
+                    project = data.project
+                );
+                return HttpResponse::InternalServerError().finish();
+            }
+        };
 
     HttpResponse::Ok().json(history)
 }
 
-#[post("/project/version")]
-async fn project_version(
+#[post("/project/reset")]
+async fn project_reset(
     database: web::Data<Database>,
-    data: web::Json<Version>,
+    data: web::Json<Reset>,
     req: HttpRequest,
 ) -> impl Responder {
     let user = match req
@@ -500,13 +502,94 @@ async fn project_version(
         return HttpResponse::Unauthorized().finish();
     }
 
-    if let Err(e) = project
-        .update_version(&database, data.version.clone())
-        .await
-    {
+    let mut version = None;
+    if let Some(deployment_id) = data.deployment {
+        version = match DatabaseDeployment::get_by_id(&database, deployment_id).await {
+            Ok(deployment) => match deployment {
+                Some(deployment) => {
+                    if deployment.project != data.project {
+                        return HttpResponse::BadRequest().json(ResponseError::new(format!(
+                            "Deployment {deployment_id} does not belong to {project}.",
+                            project = data.project
+                        )));
+                    }
+
+                    if let Err(e) = DatabaseDeployment::delete_all_after(
+                        &database,
+                        &deployment.project,
+                        deployment.id,
+                    )
+                    .await
+                    {
+                        log::error!(
+                            "Could not delete all deployments after {id} for {project}: {e}",
+                            id = deployment.id,
+                            project = deployment.project
+                        );
+                        return HttpResponse::InternalServerError().finish();
+                    }
+
+                    deployment.imagegen_git_hash
+                }
+                None => {
+                    return HttpResponse::BadRequest().json(ResponseError::new(format!(
+                        "{deployment_id} does not exist."
+                    )));
+                }
+            },
+            Err(e) => {
+                log::error!("Could not get deployment {deployment_id} from the database: {e}");
+                return HttpResponse::InternalServerError().finish();
+            }
+        };
+    } else {
+        if let Err(e) = DatabaseDeployment::delete_all_after(&database, &data.project, 0).await {
+            log::error!(
+                "Could not delete all deployments for {project}: {e}",
+                project = data.project
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+
+        let mut cli_command = Command::new(format!("{}gh", gh()));
+        cli_command
+            .env("GH_TOKEN", ghtoken())
+            .arg("repo")
+            .arg("delete")
+            .arg(format!(
+                "miniapp-factory/{project}",
+                project = &data.project
+            ))
+            .arg("--yes");
+        if let Err(e) = cli_command.output() {
+            log::error!(
+                "Could not delete github project {project}: {e}",
+                project = data.project
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+
+        let mut cli_command = Command::new(format!("{}gh", gh()));
+        cli_command
+            .env("GH_TOKEN", ghtoken())
+            .arg("repo")
+            .arg("create")
+            .arg(&data.project)
+            .arg("--public")
+            .arg("--template")
+            .arg("OpenxAI-Network/miniapp-factory-template");
+        if let Err(e) = cli_command.output() {
+            log::error!(
+                "Could not create github project {project}: {e}",
+                project = data.project
+            );
+            return HttpResponse::InternalServerError().finish();
+        }
+    }
+
+    if let Err(e) = project.update_version(&database, version.clone()).await {
         log::error!(
             "Could not update version to {version:?} for project {name}: {e}",
-            version = data.version,
             name = data.project
         );
         return HttpResponse::InternalServerError().finish();

@@ -24,9 +24,9 @@ pub struct History {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Version {
+pub struct Reset {
     pub project: String,
-    pub version: Option<String>,
+    pub deployment: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -66,5 +66,4 @@ pub struct PromoCode {
 #[derive(Serialize, Deserialize)]
 pub struct PromoCodessAddition {
     pub promo_codes: String,
-    pub signature: String,
 }

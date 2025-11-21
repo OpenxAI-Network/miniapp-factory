@@ -12,6 +12,7 @@ pub fn configure(cfg: &mut ServiceConfig) {
     cfg.service(handlers::project_create);
     cfg.service(handlers::project_change);
     cfg.service(handlers::project_history);
+    cfg.service(handlers::project_reset);
     cfg.service(handlers::project_account_association);
     cfg.service(handlers::project_base_build);
     cfg.service(handlers::deployment_llm_output);
