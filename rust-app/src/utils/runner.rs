@@ -682,7 +682,7 @@ async fn coding_assignment(
     let assignment = CoderAssignment {
         project: deployment.project.clone(),
         instructions: deployment.instructions.clone(),
-        version: project.version,
+        version: project.version.map(|version| version.replace("\n", "")),
     };
     let assignment = match serde_json::to_string(&assignment) {
         Ok(assignment) => assignment,
@@ -828,7 +828,6 @@ async fn coding_assignment(
             server = server.id
         );
     }
-
 
     if let Err(e) = server
         .update_assignment(&database, Some(deployment.id))
@@ -1011,7 +1010,6 @@ async fn imagegen_assignment(
             server = server.id
         );
     }
-
 
     let imagegen_started_at = get_time_i64();
     if let Err(e) = deployment
