@@ -205,4 +205,14 @@ impl DatabaseProject {
 }}", name = self.name
         )
     }
+
+    pub fn get_network(&self) -> Option<String> {
+        let bracket = 1 + self.id / 500;
+
+        if bracket == 1 {
+            Some("containernet".to_string())
+        } else {
+            Some(format!("net{bracket}"))
+        }
+    }
 }

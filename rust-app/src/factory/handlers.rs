@@ -281,7 +281,7 @@ async fn project_create(
                     settings: {
                         xnode_manager_sdk::config::ContainerSettings {
                             flake: project.get_flake(),
-                            network: Some("containernet".to_string()),
+                            network: project.get_network(),
                             nvidia_gpus: None,
                         }
                     },
@@ -611,7 +611,7 @@ async fn project_reset(
                     settings: {
                         xnode_manager_sdk::config::ContainerSettings {
                             flake: project.get_flake(),
-                            network: Some("containernet".to_string()),
+                            network: project.get_network(),
                             nvidia_gpus: None,
                         }
                     },
@@ -713,7 +713,7 @@ async fn project_account_association(
                     settings: {
                         xnode_manager_sdk::config::ContainerSettings {
                             flake: project.get_flake(),
-                            network: Some("containernet".to_string()),
+                            network: project.get_network(),
                             nvidia_gpus: None,
                         }
                     },
@@ -815,7 +815,7 @@ async fn project_base_build(
                     settings: {
                         xnode_manager_sdk::config::ContainerSettings {
                             flake: project.get_flake(),
-                            network: Some("containernet".to_string()),
+                            network: project.get_network(),
                             nvidia_gpus: None,
                         }
                     },
