@@ -195,6 +195,7 @@ async fn project_create(
         account_association: None,
         base_build: None,
         version: None,
+        nft_mint: None,
     };
     if let Err(e) = project.insert(&database).await {
         log::error!("Could insert {project:?} into the database: {e}",);

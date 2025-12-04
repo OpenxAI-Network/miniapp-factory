@@ -74,6 +74,14 @@ in
         '';
       };
 
+      nftminterkey = lib.mkOption {
+        type = lib.types.str;
+        example = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+        description = ''
+          The private key of the nft minter.
+        '';
+      };
+
       rpc = {
         http = lib.mkOption {
           type = lib.types.str;
@@ -123,6 +131,15 @@ in
             OPENX contract address. 
           '';
         };
+
+        nft = lib.mkOption {
+          type = lib.types.str;
+          default = "0xBdf5f85BE2d92465d1a1865Bd1aF4B84a352b27C";
+          example = "0xBdf5f85BE2d92465d1a1865Bd1aF4B84a352b27C";
+          description = ''
+            Mini App ERC721 contract address. 
+          '';
+        };
       };
 
       hyperstackapikey = lib.mkOption {
@@ -154,10 +171,12 @@ in
         GH_TOKEN = cfg.github-token;
         GH = "${cfg.gh}/bin/";
         DATABASE = cfg.database;
+        NFTMINTERKEY = cfg.nftminterkey;
         HTTPRPC = cfg.rpc.http;
         WSRPC = cfg.rpc.ws;
         DEPOSIT = cfg.contracts.deposit;
         OPENX = cfg.contracts.openx;
+        NFT = cfg.contracts.nft;
         HYPERSTACKAPIKEY = cfg.hyperstackapikey;
       };
       serviceConfig = {

@@ -4,6 +4,7 @@ use tokio::{spawn, try_join};
 use crate::{database::Database, utils::env::wsrpc};
 
 pub mod credits;
+pub mod nft;
 
 pub async fn start_event_listeners(database: Database) {
     let provider = ProviderBuilder::new()
@@ -13,6 +14,7 @@ pub async fn start_event_listeners(database: Database) {
 
     if let Err(e) = try_join!(
         spawn(credits::event_listeners(provider.clone(), database.clone())),
+        spawn(nft::event_listeners(provider.clone(), database.clone())),
     ) {
         panic!("Event listener error: {e}");
     }

@@ -9,6 +9,7 @@ use crate::{
     database::Database,
     utils::{
         env::{datadir, hostname, httprpc, port},
+        nft::mint_nfts,
         runner::{execute_pending_deployments, finish_deployment, manage_coding_servers},
     },
 };
@@ -46,6 +47,10 @@ async fn main() {
         spawn(manage_coding_servers(database.clone())),
         spawn(execute_pending_deployments(database.clone())),
         spawn(finish_deployment(database.clone())),
+        spawn(mint_nfts(
+            database.clone(),
+            DynProvider::new(provider.clone())
+        )),
         spawn(
             HttpServer::new(move || {
                 App::new()

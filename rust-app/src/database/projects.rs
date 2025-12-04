@@ -5,7 +5,7 @@ use crate::database::{Database, DatabaseConnection};
 
 pub async fn create_table(connection: &DatabaseConnection) {
     sqlx::raw_sql(
-        "CREATE TABLE IF NOT EXISTS projects(id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL, owner TEXT NOT NULL, account_association JSON, base_build JSON, version TEXT)",
+        "CREATE TABLE IF NOT EXISTS projects(id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL, owner TEXT NOT NULL, account_association JSON, base_build JSON, version TEXT, nft_mint TEXT)",
     )
     .execute(connection)
     .await
@@ -32,11 +32,12 @@ pub struct DatabaseProject {
     pub account_association: Option<Json<AccountAssociation>>,
     pub base_build: Option<Json<BaseBuild>>,
     pub version: Option<String>,
+    pub nft_mint: Option<String>,
 }
 
 impl DatabaseProject {
     pub async fn get_all(database: &Database) -> Result<Vec<Self>, Error> {
-        query_as("SELECT id, name, owner, account_association, base_build, version FROM projects")
+        query_as("SELECT id, name, owner, account_association, base_build, version, nft_mint FROM projects")
             .fetch_all(&database.connection)
             .await
     }
@@ -49,16 +50,33 @@ impl DatabaseProject {
 
     pub async fn get_all_by_owner(database: &Database, owner: &str) -> Result<Vec<Self>, Error> {
         query_as(
-            "SELECT id, name, owner, account_association, base_build, version FROM projects WHERE owner = $1",
+            "SELECT id, name, owner, account_association, base_build, version, nft_mint FROM projects WHERE owner = $1",
         )
         .bind(owner)
         .fetch_all(&database.connection)
         .await
     }
 
+    pub async fn get_next_unminted(database: &Database) -> Result<Option<Self>, Error> {
+        query_as(
+            "SELECT id, name, owner, account_association, base_build, version, nft_mint FROM projects WHERE nft_mint IS NULL ORDER BY id ASC LIMIT 1",
+        )
+        .fetch_optional(&database.connection)
+        .await
+    }
+
+    pub async fn get_by_id(database: &Database, id: i32) -> Result<Option<Self>, Error> {
+        query_as(
+            "SELECT id, name, owner, account_association, base_build, version, nft_mint FROM projects WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&database.connection)
+        .await
+    }
+
     pub async fn get_by_name(database: &Database, name: &str) -> Result<Option<Self>, Error> {
         query_as(
-            "SELECT id, name, owner, account_association, base_build, version FROM projects WHERE name = $1",
+            "SELECT id, name, owner, account_association, base_build, version, nft_mint FROM projects WHERE name = $1",
         )
         .bind(name)
         .fetch_optional(&database.connection)
@@ -66,16 +84,29 @@ impl DatabaseProject {
     }
 
     pub async fn insert(&mut self, database: &Database) -> Result<(), Error> {
-        let id: i32 = query_scalar("INSERT INTO projects(name, owner, account_association, base_build, version) VALUES ($1, $2, $3, $4, $5) RETURNING id")
+        let id: i32 = query_scalar("INSERT INTO projects(name, owner, account_association, base_build, version, nft_mint) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id")
             .bind(&self.name)
             .bind(&self.owner)
             .bind(&self.account_association)
             .bind(&self.base_build)
             .bind(&self.version)
+            .bind(&self.nft_mint)
             .fetch_one(&database.connection)
             .await?;
 
         self.id = id;
+
+        Ok(())
+    }
+
+    pub async fn update_owner(&mut self, database: &Database, owner: String) -> Result<(), Error> {
+        query("UPDATE projects SET owner = $1 WHERE id = $2;")
+            .bind(&owner)
+            .bind(self.id)
+            .execute(&database.connection)
+            .await?;
+
+        self.owner = owner;
 
         Ok(())
     }
@@ -126,6 +157,22 @@ impl DatabaseProject {
             .await?;
 
         self.version = version;
+
+        Ok(())
+    }
+
+    pub async fn update_nft_mint(
+        &mut self,
+        database: &Database,
+        nft_mint: Option<String>,
+    ) -> Result<(), Error> {
+        query("UPDATE projects SET nft_mint = $1 WHERE id = $2;")
+            .bind(&nft_mint)
+            .bind(self.id)
+            .execute(&database.connection)
+            .await?;
+
+        self.nft_mint = nft_mint;
 
         Ok(())
     }

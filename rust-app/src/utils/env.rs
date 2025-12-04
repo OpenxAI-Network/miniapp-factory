@@ -36,6 +36,10 @@ pub fn database() -> String {
     env_var("DATABASE").unwrap_or("postgres:openxai-indexer?host=/run/postgresql".to_string())
 }
 
+pub fn nftminterkey() -> String {
+    env_var("NFTMINTERKEY").expect("No NFTMINTERKEY provided.")
+}
+
 pub fn httprpc() -> String {
     env_var("HTTPRPC").unwrap_or("https://base-rpc.publicnode.com".to_string())
 }
@@ -58,6 +62,14 @@ pub fn openx() -> Address {
         None,
     )
     .unwrap_or_else(|e| panic!("Invalid USDC provided: {e}"))
+}
+
+pub fn nft() -> Address {
+    Address::parse_checksummed(
+        env_var("NFT").unwrap_or("0xBdf5f85BE2d92465d1a1865Bd1aF4B84a352b27C".to_string()),
+        None,
+    )
+    .unwrap_or_else(|e| panic!("Invalid NFT provided: {e}"))
 }
 
 pub fn hyperstackapikey() -> String {

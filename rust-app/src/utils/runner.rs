@@ -830,7 +830,7 @@ async fn coding_assignment(
     }
 
     if let Err(e) = server
-        .update_assignment(&database, Some(deployment.id))
+        .update_assignment(database, Some(deployment.id))
         .await
     {
         log::error!(
