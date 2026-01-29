@@ -8,7 +8,7 @@ pub mod nft;
 
 pub async fn start_event_listeners(database: Database) {
     let provider = ProviderBuilder::new()
-        .connect_ws(WsConnect::new(wsrpc()))
+        .connect_ws(WsConnect::new(wsrpc()).with_max_retries(u32::MAX))
         .await
         .unwrap_or_else(|e| panic!("Could not connect to WS rpc provider: {e}"));
 
