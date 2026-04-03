@@ -198,7 +198,7 @@ pub async fn manage_coding_servers(database: Database) {
                     // deploy more servers if exceeds 3*current servers
                     match DatabaseWorkerServer::get_count(&database).await {
                         Ok(coding_servers) => {
-                            let extra_servers = (queued / 3) - (coding_servers - 1);
+                            let extra_servers = ((2 + queued) / 3) - (coding_servers);
                             if extra_servers > 0 {
                                 let addr: String = get_signer().public().address().encode_hex();
                                 for _ in 0..extra_servers {
