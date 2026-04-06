@@ -1202,7 +1202,7 @@ async fn deploy_imagegen_app(
     xnode-manager.url = \"github:Openmesh-Network/xnode-manager\";
     nixified-ai.url = \"github:nixified-ai/flake\";
     miniapp-factory-imagegen.url = \"github:OpenxAI-Network/miniapp-factory-imagegen\";
-    nixpkgs.follows = \"nixified-ai/nixpkgs\";
+    nixpkgs.follows = \"miniapp-factory-imagegen/nixpkgs\";
     host.url = \"path:/etc/nixos\";
     host-nixpkgs.follows = \"host/nixpkgs\";
   };
