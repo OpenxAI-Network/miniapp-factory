@@ -1039,7 +1039,9 @@ async fn deploy_server(database: &Database, xnode_owner: String) {
 nixpkgs.config.allowUnfree = true;
 hardware.graphics = { enable = true; extraPackages = [ pkgs.nvidia-vaapi-driver ]; };
 hardware.nvidia.open = true;
-services.xserver.videoDrivers = [ \"nvidia\" ];\
+services.xserver.videoDrivers = [ \"nvidia\" ];
+networking.firewall.allowedTCPPorts = [53];
+networking.firewall.allowedUDPPorts = [53];\
 "
                 .to_string()
                 .replace("\"", "\\\"")
@@ -1091,9 +1093,10 @@ async fn deploy_coder_app(
                 flake: "\
 {
   inputs = {
-    xnode-manager.url = \"github:Openmesh-Network/xnode-manager\";
+    xnodeos.url = \"github:Openmesh-Network/xnodeos\";
+    nixified-ai.url = \"github:nixified-ai/flake\";
+    nixpkgs.follows = \"nixified-ai/nixpkgs\";
     miniapp-factory-coder.url = \"github:OpenxAI-Network/miniapp-factory-coder\";
-    nixpkgs.follows = \"miniapp-factory-coder/nixpkgs\";
     host.url = \"path:/etc/nixos\";
     host-nixpkgs.follows = \"host/nixpkgs\";
   };
@@ -1103,11 +1106,15 @@ async fn deploy_coder_app(
       \"https://openxai.cachix.org\"
       \"https://nix-community.cachix.org\"
       \"https://cuda-maintainers.cachix.org\"
+      \"https://cache.nixos-cuda.org\"
+      \"https://numtide.cachix.org\"
     ];
     extra-trusted-public-keys = [
       \"openxai.cachix.org-1:3evd2khRVc/2NiGwVmypAF4VAklFmOpMuNs1K28bMQE=\"
       \"nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs=\"
       \"cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E=\"
+      \"cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=\"
+      \"numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=\"
     ];
   };
 
@@ -1117,13 +1124,9 @@ async fn deploy_coder_app(
         inherit inputs;
       };
       modules = [
-        inputs.xnode-manager.nixosModules.container
+        inputs.xnodeos.nixosModules.container
         {
-          services.xnode-container.xnode-config = {
-            host-platform = ./xnode-config/host-platform;
-            state-version = ./xnode-config/state-version;
-            hostname = ./xnode-config/hostname;
-          };
+          services.xnode-container.xnode-config = ./xnode-config;
         }
         inputs.miniapp-factory-coder.nixosModules.default
         (
@@ -1139,7 +1142,7 @@ async fn deploy_coder_app(
           {
             services.miniapp-factory-coder.enable = true;
 
-            services.ollama.acceleration = \"cuda\";
+            services.ollama.package = pkgs.ollama-cuda;
             hardware.graphics = {
               enable = true;
               extraPackages = [
@@ -1199,10 +1202,10 @@ async fn deploy_imagegen_app(
                 flake: "\
 {
   inputs = {
-    xnode-manager.url = \"github:Openmesh-Network/xnode-manager\";
+    xnodeos.url = \"github:Openmesh-Network/xnodeos\";
     nixified-ai.url = \"github:nixified-ai/flake\";
+    nixpkgs.follows = \"nixified-ai/nixpkgs\";
     miniapp-factory-imagegen.url = \"github:OpenxAI-Network/miniapp-factory-imagegen\";
-    nixpkgs.follows = \"miniapp-factory-imagegen/nixpkgs\";
     host.url = \"path:/etc/nixos\";
     host-nixpkgs.follows = \"host/nixpkgs\";
   };
@@ -1212,11 +1215,15 @@ async fn deploy_imagegen_app(
       \"https://ai.cachix.org\"
       \"https://nix-community.cachix.org\"
       \"https://cuda-maintainers.cachix.org\"
+      \"https://cache.nixos-cuda.org\"
+      \"https://numtide.cachix.org\"
     ];
     extra-trusted-public-keys = [
       \"ai.cachix.org-1:N9dzRK+alWwoKXQlnn0H6aUx0lU/mspIoz8hMvGvbbc=\"
       \"nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs=\"
       \"cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E=\"
+      \"cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=\"
+      \"numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=\"
     ];
   };
 
@@ -1226,13 +1233,9 @@ async fn deploy_imagegen_app(
         inherit inputs;
       };
       modules = [
-        inputs.xnode-manager.nixosModules.container
+        inputs.xnodeos.nixosModules.container
         {
-          services.xnode-container.xnode-config = {
-            host-platform = ./xnode-config/host-platform;
-            state-version = ./xnode-config/state-version;
-            hostname = ./xnode-config/hostname;
-          };
+          services.xnode-container.xnode-config = ./xnode-config;
         }
         inputs.nixified-ai.nixosModules.comfyui
         inputs.miniapp-factory-imagegen.nixosModules.default
